@@ -9,6 +9,8 @@
 #include <util/delay.h>
 #include <stdbool.h>
 
+#include <stdio.h>
+
 void delay_ms(uint16_t ms)
 {
   while(ms--)
@@ -34,6 +36,9 @@ void switchled(void)
   }
 }
 
+
+char strbuf[100];
+
 int main(void)
 {
   uint16_t byte;
@@ -49,18 +54,31 @@ int main(void)
   delay_ms(500);
   PORTD &= ~(1<<PD6);
   bufptr = rfm12_init();
-  usart_puts("Init Done\r\n");
   
   sei();
   
+  usart_puts("Init Done\r\n");
+  
+  
+  
   PORTA |= (1<<PA0);
   
-  delay_ms(10);
+  delay_ms(3500);
+  
+  
+  for(i=0; i < 8; i++)
+  {
+    sprintf(strbuf, "RAND %d\r\n", rfm12_getrandomnumber());
+    usart_puts(strbuf);
+  }
+  
   
   while(1)
   {
     if(!(PINA & (1<<PA0)))
     {
+      sprintf(strbuf, "RAND %d\r\n", rfm12_getrandomnumber());
+      usart_puts(strbuf);
 #ifdef DEBUG
       usart_puts("Sending...\r\n");
 #endif
@@ -70,16 +88,17 @@ int main(void)
 	usart_puts("Sent\r\n");
 #endif
       }
+      
       delay_ms(500);
       
     }
-    delay_ms(2500);
+    
     if(rfm12_haspacket())
     {
       byte = rfm12_getpacketptr();
       for(i = 0; i < 3; i++)
       {
-	if(string[i] != bufptr[(byte+i+2)&0xFF])
+	if(string[i] != bufptr[(byte+i+2)&0x1FF])
 	{
 	  break;
 	}

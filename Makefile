@@ -10,7 +10,7 @@ FORMAT = ihex
 TARGET = main
 SRC = $(TARGET).c spi.c rfm12.c usart.c
 ASRC = 
-OPT = 2
+OPT = s
 
 # Name of this Makefile (used for "make depend").
 MAKEFILE = Makefile

@@ -144,9 +144,11 @@
 #define RFM12_STATUSRD_CRL (1<<6)
 #define RFM12_STATUSRD_ATGL (1<<5)
 
-#define BUFFER_SIZE 256
+#define BUFFER_SIZE 512
 
-enum RFM12_STATE {IDLE, PRE_RX, RX, PRE_TX, TX, POST_TX};
+#define RAND_BUFFER_SIZE 8
+
+enum RFM12_STATE {IDLE, PRE_RX, RX, PRE_TX, TX, POST_TX, GET_RANDOM};
 
 typedef struct
 {
@@ -156,11 +158,20 @@ typedef struct
   uint8_t packetcnt;
 }bufferstate;
 
+typedef struct
+{
+  uint8_t writeptr;
+  uint8_t nextbyte;
+}randombufferstate;
+
 unsigned char *rfm12_init(void);
 
 uint8_t rfm12_tx(char *buf, uint16_t length);
 bool rfm12_haspacket(void);
 uint16_t rfm12_getpacketptr(void);
 void rfm12_clearpacket(void);
+
+uint8_t rfm12_getrandomnumber(void);
+
 
 #endif

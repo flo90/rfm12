@@ -32,8 +32,14 @@ volatile uint16_t txlength;
 //Buffer
 unsigned char buf[BUFFER_SIZE];
 
+//Random buffer
+uint8_t rbuf[RAND_BUFFER_SIZE];
+
 //Buffer state
 bufferstate volatile bufstate;
+
+//Random number Buffer state
+randombufferstate volatile randombufstate;
 
 /****************************************/
 /*	This are essential functions	*/
@@ -192,17 +198,32 @@ ISR(INT0_vect)
       
       if(!length)
       {
-	//we are finished here - reset FIFO
-	rfm12_writeOp( RFM12_FIFORSTMODE | 0x0080 | RFM12_FIFORSTMODE_DR );
-	rfm12_writeOp( RFM12_FIFORSTMODE | 0x0080 | RFM12_FIFORSTMODE_FF | RFM12_FIFORSTMODE_DR );
-	state = IDLE;
 	++bufstate.packetcnt;
+	//we are finished here - use the next byte to fill random buffer
+	state = GET_RANDOM;
+	
 #ifdef DEBUG
 	sprintf(stringbuffer, "nxtpkt: %d\r\n write: %d\r\n clear %d\r\n pkgcnt %d\r\n", bufstate.nextpacketptr, bufstate.writeptr, bufstate.clearedptr, bufstate.packetcnt);
 	usart_puts(stringbuffer);
 #endif      
 
       }
+      
+      break;
+      
+    case GET_RANDOM:
+      
+      if( ((randombufstate.writeptr+1) & (RAND_BUFFER_SIZE-1)) != randombufstate.nextbyte )
+      {
+	rbuf[randombufstate.writeptr++] = rfm12_getData();
+	randombufstate.writeptr &= (RAND_BUFFER_SIZE-1);
+      }
+      
+      state = IDLE;
+      rfm12_writeOp( RFM12_FIFORSTMODE | 0x0080 | RFM12_FIFORSTMODE_DR );
+      rfm12_writeOp( RFM12_FIFORSTMODE | 0x0080 | RFM12_FIFORSTMODE_FF | RFM12_FIFORSTMODE_DR );
+	
+      
       
       break;
       
@@ -277,6 +298,9 @@ ISR(INT0_vect)
       }
       
       break;
+      
+    
+	  
   }
   
   END:
@@ -299,7 +323,7 @@ unsigned char *rfm12_init()
   //115.2 kbps
   rfm12_writeOp( RFM12_DATARATE | 0x0002 );
   
-  rfm12_writeOp( RFM12_RXCONTROL | RFM12_RXCONTROL_P20 | RFM12_RXCONTROL_BW_200);
+  rfm12_writeOp( RFM12_RXCONTROL | RFM12_RXCONTROL_P20 | RFM12_RXCONTROL_BW_200 );
   
   rfm12_writeOp( RFM12_DATAFILTER | RFM12_DATAFILTER_AL | RFM12_DATAFILTER_ML | 0x0004 );
   
@@ -326,28 +350,33 @@ unsigned char *rfm12_init()
   //enable receiver
   rfm12_writeOp( RFM12_PWRMGM  | RFM12_PWRMGM_EBB | RFM12_PWRMGM_ES | RFM12_PWRMGM_EX | RFM12_PWRMGM_DC  | RFM12_PWRMGM_ER);
   
-  //Just a dummy status read to clear a possible interrupt
-  rfm12_writeOp(RFM12_STATUSRD);
-  
-  //directly enable RX
-  rfm12_writeOp( RFM12_FIFORSTMODE | 0x0080 | RFM12_FIFORSTMODE_FF | RFM12_FIFORSTMODE_DR );
-  
-  
+  //Data buffer init
   bufstate.nextpacketptr = 0;
   bufstate.writeptr = 0;
   bufstate.clearedptr = BUFFER_SIZE - 1;
   bufstate.packetcnt = 0;
   
+  
+  //Random number buffer init
+  randombufstate.writeptr = 0;
+  randombufstate.nextbyte = 0;
+  
   //enable INT0 - falling edge
   EICRA |= ( 1 << ISC01 );
   EIMSK = 1;
   
-  
+  //Just a dummy status read to clear a possible interrupt on the RFM12
+  rfm12_writeOp(RFM12_STATUSRD);
   
   //clear interrupt
   EIFR = (1 << INTF0);
   
+  //Enable interrupt
   EIMSK = 1;
+  
+  
+  //directly enable RX
+  rfm12_writeOp( RFM12_FIFORSTMODE | 0x0080 | RFM12_FIFORSTMODE_FF | RFM12_FIFORSTMODE_DR );
   
   return buf;
 }
@@ -427,4 +456,18 @@ void rfm12_clearpacket()
 #endif
 */
   }
+}
+
+uint8_t rfm12_getrandomnumber()
+{
+  uint8_t temp;
+  //EIMSK = 0;
+  if(randombufstate.writeptr == randombufstate.nextbyte)
+  {
+    //EIMSK = 1;
+    return 0;
+  }
+  temp = rbuf[randombufstate.nextbyte++];
+  //EIMSK = 1;
+  return temp;
 }

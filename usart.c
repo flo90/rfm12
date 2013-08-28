@@ -1,4 +1,3 @@
-#include "config.h"
 /*
     This file is part of the rfm12 driver project.
     Copyright (C) 2013  Florian Menne (florianmenne@t-online.de)
@@ -17,10 +16,12 @@
     along with this program.  If not, see [http://www.gnu.org/licenses/].
 */
 
+#include "config.h"
 #include "usart.h"
 
 #include <avr/io.h>
 #include <util/setbaud.h>
+
 void usart_init()
 {
   

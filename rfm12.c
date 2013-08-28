@@ -18,22 +18,12 @@
 
 #include "config.h"
 #include "rfm12.h"
-#include "usart.h"
 
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
 #include <inttypes.h>
 #include <stdbool.h>
-
-//#include <util/delay.h>
-
-#ifdef DEBUG
-
-#include <stdio.h>
-char stringbuffer[100];
-
-#endif
 
 //This is a state machine
 volatile enum RFM12_STATE state;
@@ -189,9 +179,6 @@ ISR(INT0_vect)
 	  //get the checksum, calculate it and check if enough space is available in the buffer
 	  if(rfm12_getData() == (uint8_t)(length_high + length_low) && ( (bufstate.clearedptr-bufstate.writeptr) & (BUFFER_SIZE-1) ) >= length)
 	  {
-#ifdef DEBUG
-	    //usart_puts("Packet OK\r\n");
-#endif
 	    
 	    buf[bufstate.writeptr++] = length_high;
 	    bufstate.writeptr &= (BUFFER_SIZE-1);
@@ -205,9 +192,7 @@ ISR(INT0_vect)
 	  else
 	  {
 	    //stop RX
-#ifdef DEBUG
-	    usart_puts("BIG\r\n");
-#endif
+	    
 	    //if an error occure restart the fifo trigger an enter state idle
 	    rfm12_writeOp( RFM12_FIFORSTMODE | 0x0080 | RFM12_FIFORSTMODE_DR );
 	    rfm12_writeOp( RFM12_FIFORSTMODE | 0x0080 | RFM12_FIFORSTMODE_FF | RFM12_FIFORSTMODE_DR );
@@ -231,12 +216,6 @@ ISR(INT0_vect)
 	++bufstate.packetcnt;
 	//we are finished here - use the next byte to fill random buffer
 	state = GET_RANDOM;
-	
-#ifdef DEBUG
-	sprintf(stringbuffer, "nxtpkt: %d\r\n write: %d\r\n clear %d\r\n pkgcnt %d\r\n", bufstate.nextpacketptr, bufstate.writeptr, bufstate.clearedptr, bufstate.packetcnt);
-	usart_puts(stringbuffer);
-#endif      
-
       }
       
       break;
@@ -252,8 +231,6 @@ ISR(INT0_vect)
       state = IDLE;
       rfm12_writeOp( RFM12_FIFORSTMODE | 0x0080 | RFM12_FIFORSTMODE_DR );
       rfm12_writeOp( RFM12_FIFORSTMODE | 0x0080 | RFM12_FIFORSTMODE_FF | RFM12_FIFORSTMODE_DR );
-	
-      
       
       break;
       
@@ -328,9 +305,6 @@ ISR(INT0_vect)
       }
       
       break;
-      
-    
-	  
   }
   
   END:
@@ -345,8 +319,6 @@ unsigned char *rfm12_init()
   
   //start init
   rfm12_writeOp( RFM12_CFGSET | RFM12_CFGSET_EL | RFM12_CFGSET_EF  | RFM12_CFGSET_FREQ_433 | 0x08 );
-  
-  
   
   rfm12_writeOp( RFM12_PWRMGM | RFM12_PWRMGM_EBB | RFM12_PWRMGM_ES | RFM12_PWRMGM_EX | RFM12_PWRMGM_DC );
   
@@ -425,12 +397,8 @@ uint8_t rfm12_tx(char *pbuf, uint16_t length)
     return 1;
   }
   
-  
-  
   //stop the fifo trigger
   rfm12_writeOp( RFM12_FIFORSTMODE | 0x0080 | RFM12_FIFORSTMODE_DR );
-  
-  
   
   //deactivate RX
   rfm12_writeOp( RFM12_PWRMGM  | RFM12_PWRMGM_EBB | RFM12_PWRMGM_EX | RFM12_PWRMGM_DC  | RFM12_PWRMGM_ES );
@@ -481,13 +449,6 @@ void rfm12_clearpacket()
     disableint();
     --bufstate.packetcnt;
     enableint();
-/*
-#ifdef DEBUG
-    
-	sprintf(stringbuffer, "nxtpkt: %d\r\n write: %d\r\n clear %d\r\n pkgcnt %d\r\n", bufstate.nextpacketptr, bufstate.writeptr, bufstate.clearedptr, bufstate.packetcnt);
-	usart_puts(stringbuffer);
-#endif
-*/
   }
 }
 

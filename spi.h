@@ -19,7 +19,6 @@
 #ifndef _SPI_H_
 #define _SPI_H_
 
-
 #include <inttypes.h>
 
 #define SPI_SPIE ( 1 << 7 )
@@ -45,7 +44,5 @@
 void spi_init( uint8_t cfg, uint8_t spd );
 
 unsigned char spi_exchangebyte( unsigned char data );
-
-
 
 #endif

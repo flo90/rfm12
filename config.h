@@ -16,7 +16,12 @@
     along with this program.  If not, see [http://www.gnu.org/licenses/].
 */
 
+#ifndef _RFM12_H_
+#define _RFM12_H_
+
 #define F_CPU 20000000UL
 #define BAUD 115200UL
 
 //#define DEBUG
+
+#endif

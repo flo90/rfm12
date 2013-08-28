@@ -82,7 +82,6 @@
 #define RFM12_RXCONTROL_RSSI_67 (0b110<<0)
 #define RFM12_RXCONTROL_RSSI_61 (0b111<<0)
 
-
 //Data Filter Command
 #define RFM12_DATAFILTER 0xC228
 
@@ -190,6 +189,5 @@ uint16_t rfm12_getpacketptr(void);
 void rfm12_clearpacket(void);
 
 uint8_t rfm12_getrandomnumber(void);
-
 
 #endif

@@ -1,3 +1,21 @@
+/*
+    This file is part of the rfm12 driver project.
+    Copyright (C) 2013  Florian Menne (florianmenne@t-online.de)
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see [http://www.gnu.org/licenses/].
+*/
+
 #include "config.h"
 #include "spi.h"
 #include "rfm12.h"
@@ -36,9 +54,6 @@ void switchled(void)
   }
 }
 
-
-char strbuf[100];
-
 int main(void)
 {
   uint16_t byte;
@@ -51,34 +66,26 @@ int main(void)
   DDRD |= (1<<PD6) | (1<<PD5);
   
   PORTD |= (1<<PD6);
+  
   delay_ms(500);
+  
   PORTD &= ~(1<<PD6);
   bufptr = rfm12_init();
   
   sei();
   
+  
+  
   usart_puts("Init Done\r\n");
-  
-  
   
   PORTA |= (1<<PA0);
   
-  delay_ms(3500);
-  
-  
-  for(i=0; i < 8; i++)
-  {
-    sprintf(strbuf, "RAND %d\r\n", rfm12_getrandomnumber());
-    usart_puts(strbuf);
-  }
-  
+  delay_ms(500);
   
   while(1)
   {
     if(!(PINA & (1<<PA0)))
     {
-      sprintf(strbuf, "RAND %d\r\n", rfm12_getrandomnumber());
-      usart_puts(strbuf);
 #ifdef DEBUG
       usart_puts("Sending...\r\n");
 #endif
@@ -88,7 +95,7 @@ int main(void)
 	usart_puts("Sent\r\n");
 #endif
       }
-      
+      usart_puts("Sending...\r\n");
       delay_ms(500);
       
     }

@@ -1,3 +1,21 @@
+/*
+    This file is part of the rfm12 driver project.
+    Copyright (C) 2013  Florian Menne (florianmenne@t-online.de)
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see [http://www.gnu.org/licenses/].
+*/
+
 #include "config.h"
 #include "rfm12.h"
 #include "usart.h"
@@ -56,6 +74,18 @@ static inline void deselect(void)
   //Do not forget to implement deselect!
   
   PORTB |= (1 << PB4);
+}
+
+static inline void disableint(void)
+{
+  //Do not forget to implement disable interrupt
+  EIMSK &= ~(1<<INT0);
+}
+
+static inline void enableint(void)
+{
+  //Do not forget do implement enable interrupt
+  EIMSK |= (1<<INT0);
 }
 
 static inline uint16_t rfm12_writeOp(uint16_t data)
@@ -363,7 +393,6 @@ unsigned char *rfm12_init()
   
   //enable INT0 - falling edge
   EICRA |= ( 1 << ISC01 );
-  EIMSK = 1;
   
   //Just a dummy status read to clear a possible interrupt on the RFM12
   rfm12_writeOp(RFM12_STATUSRD);
@@ -372,7 +401,7 @@ unsigned char *rfm12_init()
   EIFR = (1 << INTF0);
   
   //Enable interrupt
-  EIMSK = 1;
+  enableint();
   
   
   //directly enable RX
@@ -388,16 +417,20 @@ uint8_t rfm12_tx(char *pbuf, uint16_t length)
     return 1;
   }
   //Stop the interrupt
-  EIMSK = 0;
+  disableint();
   
   if(state != IDLE)
   {
-    EIMSK = 1;
+    enableint();
     return 1;
   }
   
+  
+  
   //stop the fifo trigger
   rfm12_writeOp( RFM12_FIFORSTMODE | 0x0080 | RFM12_FIFORSTMODE_DR );
+  
+  
   
   //deactivate RX
   rfm12_writeOp( RFM12_PWRMGM  | RFM12_PWRMGM_EBB | RFM12_PWRMGM_EX | RFM12_PWRMGM_DC  | RFM12_PWRMGM_ES );
@@ -421,7 +454,7 @@ uint8_t rfm12_tx(char *pbuf, uint16_t length)
   //start the transmitter
   rfm12_writeOp( RFM12_PWRMGM  | RFM12_PWRMGM_EBB | RFM12_PWRMGM_ES | RFM12_PWRMGM_EX | RFM12_PWRMGM_DC  | RFM12_PWRMGM_ET);
   
-  EIMSK = 1;
+  enableint();
   
   return 0;
 }
@@ -445,9 +478,9 @@ void rfm12_clearpacket()
     bufstate.clearedptr = (length+bufstate.nextpacketptr+2-1) & (BUFFER_SIZE-1);
     bufstate.nextpacketptr = (bufstate.clearedptr+1) & (BUFFER_SIZE-1);
     
-    EIMSK = 0;
+    disableint();
     --bufstate.packetcnt;
-    EIMSK = 1;
+    enableint();
 /*
 #ifdef DEBUG
     
@@ -461,13 +494,17 @@ void rfm12_clearpacket()
 uint8_t rfm12_getrandomnumber()
 {
   uint8_t temp;
-  //EIMSK = 0;
+  
+  disableint();
+  
   if(randombufstate.writeptr == randombufstate.nextbyte)
   {
-    //EIMSK = 1;
+    enableint();
     return 0;
   }
   temp = rbuf[randombufstate.nextbyte++];
-  //EIMSK = 1;
+  
+  enableint();
+  
   return temp;
 }

@@ -110,6 +110,12 @@ typedef struct RFM12_PHY_RegStatus
   uint16_t PWRMGMT;
 } RFM12_PHY_RegStatus_t;
 
+typedef enum RFM12_PHY_BAUDRATE
+{
+  RFM12_PHY_BAUDRATE_9600 = 35,
+  RFM12_PHY_BAUDRATE_19200 = 17,
+  RFM12_PHY_BAUDRATE_115200 = 2
+} RFM12_PHY_BAUDRATE_t;
 
 void rfm12_phy_init(uint16_t (*pRFM12_phy_exchangeWord)(uint16_t word), void (*pRFM12_phy_SPISelect) (void), void (*pRFM12_phy_SPIDeselect)(void), bool (*RFM12_phy_nextLayerReceiveCallback)(uint8_t), uint8_t (*RFM12_phy_nextLayerTransmitCallback)(void));
 
@@ -131,7 +137,7 @@ void rfm12_phy_setPowerManagement( bool enBB, bool enSynth, bool enOSC, bool enB
 void rfm12_phy_setFrequency(uint16_t freq);
 
 // OK
-void rfm12_phy_setBaudrate(uint8_t baudrate);
+void rfm12_phy_setBaudrate(RFM12_PHY_BAUDRATE_t baudrate);
 
 // OK
 void rfm12_phy_setRecvCtrl(bool p20, RFM12_VDI_t vdi, RFM12_BW_t bw, RFM12_LNAGAIN_t lna, RFM12_RSSIDTH_t rssiDTh);

@@ -104,9 +104,9 @@ void rfm12_phy_setFrequency(uint16_t freq)
   rfm12_phy_SPIWrite(RFM12_FREQSET | (freq & 0xFF));
 }
 
-void rfm12_phy_setBaudrate(uint8_t baudrate)
+void rfm12_phy_setBaudrate(RFM12_PHY_BAUDRATE_t baudrate)
 {
-  rfm12_phy_SPIWrite(RFM12_DATARATE | (baudrate&0xFF));
+  rfm12_phy_SPIWrite(RFM12_DATARATE | (baudrate & 0xFF));
 }
 
 void rfm12_phy_setRecvCtrl(bool p20, RFM12_VDI_t vdi, RFM12_BW_t bw, RFM12_LNAGAIN_t lna, RFM12_RSSIDTH_t rssiDTh)

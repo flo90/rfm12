@@ -4,15 +4,15 @@
 #include <stdbool.h>
 #include <inttypes.h>
 
-typedef enum RFM12_FREQBAND
+typedef enum RFM12_PHY_FREQBAND
 {
   FREQBAND_315MHz,
   FREQBAND_433MHz,
   FREQBAND_868MHZ,
   FREQBAND_915MHz
-} RFM12_FREQBAND_t;
+} RFM12_PHY_FREQBAND_t;
 
-typedef enum RFM12_CAP
+typedef enum RFM12_PHY_CAP
 {
   CAP8_5pf,
   CAP9_0pf,
@@ -30,35 +30,35 @@ typedef enum RFM12_CAP
   CAP15_0pf,
   CAP15_5pf,
   CAP16_0pf
-} RFM12_CAP_t;
+} RFM12_PHY_CAP_t;
 
-typedef enum RFM12_VDI
+typedef enum RFM12_PHY_VDI
 {
   VDI_FAST,
   VDI_MEDIUM,
   VDI_SLOW,
   VDI_ALWAYSON
-} RFM12_VDI_t;
+} RFM12_PHY_VDI_t;
 
-typedef enum RFM12_BW
+typedef enum RFM12_PHY_BW
 {
-  BW400 = 1,
-  BW340 = 2,
-  BW270 = 3,
-  BW200 = 4,
-  BW134 = 5,
-  BW67 = 6
-} RFM12_BW_t;
+  RFM12_PHY_BW400 = 1,
+  RFM12_PHY_BW340 = 2,
+  RFM12_PHY_BW270 = 3,
+  RFM12_PHY_BW200 = 4,
+  RFM12_PHY_BW134 = 5,
+  RFM12_PHY_BW67 = 6
+} RFM12_PHY_BW_t;
 
-typedef enum RFM12_LNAGAIN
+typedef enum RFM12_PHY_LNAGAIN
 {
   LNA_0,
   LNA_MINUS6,
   LNA_MINUS14,
   LNA_MINUS20
-} RFM12_LNAGAIN_t;
+} RFM12_PHY_LNAGAIN_t;
 
-typedef enum RFM12_RSSIDTH
+typedef enum RFM12_PHY_RSSIDTH
 {
   RSSI_MINUS103,
   RSSI_MINUS97,
@@ -68,25 +68,32 @@ typedef enum RFM12_RSSIDTH
   RSSI_MINUS73,
   RSSI_MINUS67,
   RSSI_MINUS61
-} RFM12_RSSIDTH_t;
+} RFM12_PHY_RSSIDTH_t;
 
-typedef enum RFM12_AutoMode
+typedef enum RFM12_PHY_AutoMode
 {
   AUTOMODE_OFF,
   AUTOMODE_POWERUP,
   AUTOMODE_RECV,
   AUTOMODE_INDEPENDENT
-} RFM12_AutoMode_t;
+} RFM12_PHY_AutoMode_t;
 
-typedef enum RFM12_RangeLimit
+typedef enum RFM12_PHY_RangeLimit
 {
   RANGELIMIT_NORESTRICT,
   RANGELIMIT_15toMINUS16,
   RANGELIMIT_7toMINUS8,
   RANGELIMIT_3toMINUS4
-} RFM12_RangeLimit_t;
+} RFM12_PHY_RangeLimit_t;
 
-typedef enum RFM12_OutPwr
+typedef enum RFM12_PHY_FREQDEVIATION
+{
+  RFM12_FREQDEVIATION_45KHz = 2,
+  RFM12_FREQDEVIATION_90KHz = 5,
+  RFM12_FREQDEVIATION_120KHz = 7,
+} RFM12_PHY_FREQDEVIATION_t;
+
+typedef enum RFM12_PHY_OutPwr
 {
   OUTPWR_0,
   OUTPWR_MINUS3,
@@ -96,7 +103,7 @@ typedef enum RFM12_OutPwr
   OUTPWR_MINUS15,
   OUTPWR_MINUS18,
   OUTPWR_MINUS21
-} RFM12_OutPwr_t;
+} RFM12_PHY_OutPwr_t;
 
 typedef enum RFM12_PHY_State
 {
@@ -117,7 +124,7 @@ typedef enum RFM12_PHY_BAUDRATE
   RFM12_PHY_BAUDRATE_115200 = 2
 } RFM12_PHY_BAUDRATE_t;
 
-void rfm12_phy_init(uint16_t (*pRFM12_phy_exchangeWord)(uint16_t word), void (*pRFM12_phy_SPISelect) (void), void (*pRFM12_phy_SPIDeselect)(void), bool (*RFM12_phy_nextLayerReceiveCallback)(uint8_t), uint8_t (*RFM12_phy_nextLayerTransmitCallback)(void));
+void rfm12_phy_init(uint16_t (*pRFM12_phy_exchangeWord)(uint16_t word), void (*pRFM12_phy_SPISelect) (void), void (*pRFM12_phy_SPIDeselect)(void));
 
 uint16_t rfm12_phy_SPIWrite(uint16_t data);
 
@@ -128,7 +135,7 @@ bool rfm12_phy_busy(void);
 void rfm12_phy_int_vect(void);
 
 // OK
-void rfm12_phy_setConf( bool enDataReg, bool enFIFO, RFM12_FREQBAND_t freqband, RFM12_CAP_t loadcap);
+void rfm12_phy_setConf( bool enDataReg, bool enFIFO, RFM12_PHY_FREQBAND_t freqband, RFM12_PHY_CAP_t loadcap);
 
 // OK
 void rfm12_phy_setPowerManagement( bool enBB, bool enSynth, bool enOSC, bool enBat, bool enWkT, bool clkOff);
@@ -140,7 +147,7 @@ void rfm12_phy_setFrequency(uint16_t freq);
 void rfm12_phy_setBaudrate(RFM12_PHY_BAUDRATE_t baudrate);
 
 // OK
-void rfm12_phy_setRecvCtrl(bool p20, RFM12_VDI_t vdi, RFM12_BW_t bw, RFM12_LNAGAIN_t lna, RFM12_RSSIDTH_t rssiDTh);
+void rfm12_phy_setRecvCtrl(bool p20, RFM12_PHY_VDI_t vdi, RFM12_PHY_BW_t bw, RFM12_PHY_LNAGAIN_t lna, RFM12_PHY_RSSIDTH_t rssiDTh);
 
 // OK
 void rfm12_phy_setDataFilter(bool autoLock, bool fastMode, bool analog, uint8_t dqdThres);
@@ -149,9 +156,9 @@ void rfm12_phy_setDataFilter(bool autoLock, bool fastMode, bool analog, uint8_t 
 void rfm12_phy_setFIFORst(uint8_t bittrigger, bool alwaysfill, bool enFIFO, bool disableHighSensRst);
 
 // OK
-void rfm12_phy_setAFC(RFM12_AutoMode_t automode, RFM12_RangeLimit_t rangelimit, bool strobeEdge, bool fineMode, bool offsetRegister, bool enAFC);
+void rfm12_phy_setAFC(RFM12_PHY_AutoMode_t automode, RFM12_PHY_RangeLimit_t rangelimit, bool strobeEdge, bool fineMode, bool offsetRegister, bool enAFC);
 
 //  OK
-void rfm12_phy_setTxConf(uint8_t FSKModParm, RFM12_OutPwr_t pwr);
+void rfm12_phy_setTxConf(bool mp, RFM12_PHY_FREQDEVIATION_t deviation, RFM12_PHY_OutPwr_t pwr);
 
 #endif

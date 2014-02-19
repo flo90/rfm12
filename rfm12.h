@@ -165,6 +165,9 @@
 
 #define RAND_BUFFER_SIZE 8
 
+#define RFM12_ESCAPECHAR 0xFE
+#define RFM12_EOF 0xFF
+
 enum RFM12_STATE {IDLE, PRE_RX, RX, PRE_TX, TX, POST_TX, GET_RANDOM};
 
 typedef struct
@@ -180,6 +183,12 @@ typedef struct
   uint8_t writeptr;
   uint8_t nextbyte;
 }randombufferstate;
+
+typedef enum RFM12_Transfer_Error
+{
+  RFM12_TRANSFER_STATUS_PAKET_CORRUPT,
+  RFM12_TRANSFER_STATUS_LOST_SIGNAL
+} RFM12_Transfer_Error_t;
 
 unsigned char *rfm12_init(void);
 

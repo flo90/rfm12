@@ -1,14 +1,15 @@
-#include "rfm12phy.h"
 #include "rfm12.h"
 
 #include <stdlib.h>
 #include <stdbool.h>
 
+#include "rfm12phy.h"
+#include "rfm12mac.h"
+
 uint16_t (*RFM12_phy_exchangeWord)(uint16_t word) = NULL;
 void (*RFM12_phy_SPISelect) (void) = NULL;
 void (*RFM12_phy_SPIDeselect)(void) = NULL;
 
-bool (*RFM12_phy_nextLayerReceiveCallback)(uint8_t) = NULL;
 uint8_t (*RFM12_phy_nextLayerTransmitCallback)(void) = NULL;
 
 RFM12_PHY_State_t phystate;
@@ -47,15 +48,12 @@ static inline void __inline_rfm12_phy_disableRXTX(void)
   rfm12_phy_SPIWrite(RFM12_PWRMGM | regstatus.PWRMGMT);
 }
 
-void rfm12_phy_init(uint16_t (*pRFM12_phy_exchangeWord)(uint16_t word), void (*pRFM12_phy_SPISelect) (void), void (*pRFM12_phy_SPIDeselect)(void), bool (*pRFM12_phy_nextLayerReceiveCallback)(uint8_t), uint8_t (*pRFM12_phy_nextLayerTransmitCallback)(void))
+void rfm12_phy_init(uint16_t (*pRFM12_phy_exchangeWord)(uint16_t word), void (*pRFM12_phy_SPISelect) (void), void (*pRFM12_phy_SPIDeselect)(void))
 {
   RFM12_phy_exchangeWord = pRFM12_phy_exchangeWord;
   RFM12_phy_SPISelect = pRFM12_phy_SPISelect;
   RFM12_phy_SPIDeselect = pRFM12_phy_SPIDeselect;
-  RFM12_phy_nextLayerReceiveCallback = pRFM12_phy_nextLayerReceiveCallback;
-  RFM12_phy_nextLayerTransmitCallback = pRFM12_phy_nextLayerTransmitCallback;
 }
-
 
 uint16_t rfm12_phy_SPIWrite(uint16_t data)
 {
@@ -87,9 +85,9 @@ void rfm12_phy_modeRX()
   __inline_rfm12_phy_startRX();
 }
 
-void rfm12_phy_setConf( bool enDataReg, bool enFIFO, RFM12_FREQBAND_t freqband, RFM12_CAP_t loadcap)
+void rfm12_phy_setConf( bool enDataReg, bool enFIFO, RFM12_PHY_FREQBAND_t freqband, RFM12_PHY_CAP_t loadcap)
 {
-  rfm12_phy_SPIWrite(RFM12_CFGSET | ((enDataReg<<7) & 0x80) | ((enFIFO<<6) & 0x40) | ((freqband<<4)&0x30 | (loadcap&0xF)));
+  rfm12_phy_SPIWrite(RFM12_CFGSET | ((enDataReg<<7) & 0x80) | ((enFIFO<<6) & 0x40) | ((freqband<<4)&0x30) | (loadcap&0xF));
 }
 
 void rfm12_phy_setPowerManagement(bool enBB, bool enSynth, bool enOSC, bool enBat, bool enWkT, bool clkOff)
@@ -109,7 +107,7 @@ void rfm12_phy_setBaudrate(RFM12_PHY_BAUDRATE_t baudrate)
   rfm12_phy_SPIWrite(RFM12_DATARATE | (baudrate & 0xFF));
 }
 
-void rfm12_phy_setRecvCtrl(bool p20, RFM12_VDI_t vdi, RFM12_BW_t bw, RFM12_LNAGAIN_t lna, RFM12_RSSIDTH_t rssiDTh)
+void rfm12_phy_setRecvCtrl(bool p20, RFM12_PHY_VDI_t vdi, RFM12_PHY_BW_t bw, RFM12_PHY_LNAGAIN_t lna, RFM12_PHY_RSSIDTH_t rssiDTh)
 {
   rfm12_phy_SPIWrite(RFM12_RXCONTROL | ((p20<<10)&0x400) | ((vdi<<8)&0x300) | ((bw<<5)&0xE00) | ((lna<<3)&0x18) | (rssiDTh&0x7));
 }
@@ -124,14 +122,14 @@ void rfm12_phy_setFIFORst(uint8_t bittrigger, bool alwaysfill, bool enFIFO, bool
   rfm12_phy_SPIWrite(RFM12_FIFORSTMODE | ((bittrigger<<4)&0xF0) | ((alwaysfill<<2) & 0x4) | ((enFIFO<<1) & 0x2) | (disableHighSensRst & 0x1));
 }
 
-void rfm12_phy_setAFC(RFM12_AutoMode_t automode, RFM12_RangeLimit_t rangelimit, bool strobeEdge, bool fineMode, bool offsetRegister, bool enAFC)
+void rfm12_phy_setAFC(RFM12_PHY_AutoMode_t automode, RFM12_PHY_RangeLimit_t rangelimit, bool strobeEdge, bool fineMode, bool offsetRegister, bool enAFC)
 {
   rfm12_phy_SPIWrite(RFM12_AFC | ((automode<<6)&0xC0) | ((rangelimit<<4)&0x30) | ((strobeEdge<<3)&0x8) | ((fineMode<<2)&0x4) | ((offsetRegister<<1)&0x2) | (enAFC&0x1));
 }
 
-void rfm12_phy_setTxConf(uint8_t FSKModParm, RFM12_OutPwr_t pwr)
+void rfm12_phy_setTxConf(bool mp, RFM12_PHY_FREQDEVIATION_t deviation, RFM12_PHY_OutPwr_t pwr)
 {
-  rfm12_phy_SPIWrite(RFM12_TXCFG | ((FSKModParm<<4)&0x1F0) | (pwr&7));
+  rfm12_phy_SPIWrite(RFM12_TXCFG | ((mp<<8) & 0x100) | ((deviation<<4)&0x1F0) | (pwr&0x7));
 }
 
 void rfm12_phy_int_vect()
@@ -150,11 +148,12 @@ void rfm12_phy_int_vect()
       case RFM12_PHY_STATE_RECEIVE:
 	buffer = __inline_rfm12_phy_getFIFOByte();
 	
-	if(!RFM12_phy_nextLayerReceiveCallback(buffer))
+	if(!rfm12_mac_previousLayerReceiveCallback(buffer))
 	{
 	  rfm12_phy_modeRX();
+	  phystate = RFM12_PHY_STATE_IDLE;
 	}
-	
+
 	break;
 	
       case RFM12_PHY_STATE_TRANSMIT:

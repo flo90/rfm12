@@ -9,6 +9,7 @@
 const uint8_t _rfm12_mac_sync[] = {0x2D, 0xD4};
 
 RFM12_MAC_State_t macstate;
+uint16_t length;
 
 bool (*rfm12_mac_nextLayerReceiveCallback)(uint8_t data) = NULL;
 
@@ -26,10 +27,7 @@ void rfm12_mac_startTransmission(void)
 }
 
 bool rfm12_mac_previousLayerReceiveCallback(uint8_t data)
-{
-  //length of incoming packet
-  static uint16_t length = 0;
-  
+{ 
   //just a cheap checksum to ensure that the length is not corrupted 
   static uint8_t checksum = 0;
   switch(macstate)
@@ -82,7 +80,37 @@ bool rfm12_mac_previousLayerReceiveCallback(uint8_t data)
 
 uint8_t rfm12_mac_previousLayerTransmitCallback(void)
 {
-  
+  switch(macstate)
+  {
+    case RFM12_MAC_STATE_TX_PREAMBLE1:
+      return _rfm12_mac_sync[0];
+      
+    case RFM12_MAC_STATE_TX_PREAMBLE2:
+      return _rfm12_mac_sync[1];
+      
+    case RFM12_MAC_STATE_TX_LENGTH_HIGH:
+      return length>>8;
+      
+    case RFM12_MAC_STATE_TX_LENGTH_LOW:
+      return length&0xFF;
+      
+    case RFM12_MAC_STATE_TX:
+      --length;
+      if(length)
+      {
+	//TODO: return with llc function
+	return 0x00;
+      }
+      else
+      {
+	macstate = RFM12_MAC_STATE_TX_END;
+	//just dummy byte
+	return 0xAA;
+      }
+    case RFM12_MAC_STATE_TX_END:
+      rfm12_phy_modeRX();
+      return 0xAA;
+  }
 }
 
 void rfm12_mac_resetStateMachine(RFM12_Transfer_Error_t err)

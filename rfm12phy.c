@@ -10,8 +10,6 @@ uint16_t (*RFM12_phy_exchangeWord)(uint16_t word) = NULL;
 void (*RFM12_phy_SPISelect) (void) = NULL;
 void (*RFM12_phy_SPIDeselect)(void) = NULL;
 
-uint8_t (*RFM12_phy_nextLayerTransmitCallback)(void) = NULL;
-
 RFM12_PHY_State_t phystate;
 RFM12_PHY_RegStatus_t regstatus;
 
@@ -157,7 +155,7 @@ void rfm12_phy_int_vect()
 	break;
 	
       case RFM12_PHY_STATE_TRANSMIT:
-	__inline_rfm12_phy_putFIFOByte(RFM12_phy_nextLayerTransmitCallback());
+	__inline_rfm12_phy_putFIFOByte(rfm12_mac_previousLayerTransmitCallback());
 	break;
     }
   }

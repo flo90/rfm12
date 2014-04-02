@@ -18,8 +18,12 @@
 
 #include "config.h"
 #include "spi.h"
-#include "rfm12.h"
 #include "usart.h"
+#include "rfm12.h"
+#include "rfm12llc.h"
+
+
+#include "rfm12phy.h"
 
 #include <avr/io.h>
 #include <avr/interrupt.h>
@@ -28,6 +32,10 @@
 #include <stdbool.h>
 
 #include <stdio.h>
+
+char rxbuf[10];
+uint8_t txbuf[] = "Hallo";
+uint8_t *txbufptr = txbuf;
 
 void delay_ms(uint16_t ms)
 {
@@ -54,73 +62,91 @@ void switchled(void)
   }
 }
 
+void enablerfm12(void)
+{
+  PORTB &= ~(1<<PB4);
+}
+
+void disablerfm12(void)
+{
+  PORTB |= (1<<PB4);
+}
+
+void (*rfm12_int_vect)(void) = NULL;
+
+bool receive(uint8_t data, bool lastbyte)
+{
+  if(!lastbyte)
+  {
+    
+  }
+  return true;
+}
+
+uint8_t transmit(void)
+{
+  return *txbufptr++;
+}
+
 int main(void)
 {
-  uint16_t byte;
-  uint8_t i;
-  unsigned char *bufptr;
-  char string[] = {'L','E','D'};
+  //init ports
+  DDRD |= (1<<PD6) | (1<<PD5);
+  PORTD |= (1<<PD2);
+  
+  //config interrupts
+  
+  //EICRA |= (1<<ISC01);
+  EIMSK |= (1<<INT0);
+  
+  //while(1);
+  
   usart_init();
   spi_init(SPI_SPE | SPI_MSTR , SPI_CLK_8);
   
-  DDRD |= (1<<PD6) | (1<<PD5);
+  rfm12_init( &spi_exchangeword, &enablerfm12, &disablerfm12, &rfm12_int_vect, &receive, &transmit, 1);
+  
+  //------------------PHY Layer TEST-----------------------
+  /*
+  rfm12_phy_init(&spi_exchangeword, &enablerfm12, &disablerfm12, &rfm12_int_vect);
+  
+  rfm12_phy_setConf( true, true, FREQBAND_433MHz, CAP12_5pf);
+  
+  rfm12_phy_setPowerManagement( true, true, true, false, false, false);
+  
+  rfm12_phy_setDataFilter(true, false, false, 4);
+  
+  rfm12_phy_setAFC(AUTOMODE_RECV, RANGELIMIT_3toMINUS4, false, true, true, true);
+  
+  rfm12_phy_modeRX();
+  */
+  
+  
   
   PORTD |= (1<<PD6);
   
   delay_ms(500);
   
   PORTD &= ~(1<<PD6);
-  bufptr = rfm12_init();
+  
+  
+  //clear interrupt flags
+  EIFR |= (1<<INTF0);
   
   sei();
+
+  delay_ms(1000);
+  //rfm12_llc_startTX(1, sizeof(txbuf));
   
-  
-  
-  usart_puts("Init Done\r\n");
-  
-  PORTA |= (1<<PA0);
-  
-  delay_ms(500);
-  
-  while(1)
-  {
-    if(!(PINA & (1<<PA0)))
-    {
-#ifdef DEBUG
-      usart_puts("Sending...\r\n");
-#endif
-      if(!rfm12_tx(string, 3))
-      {
-#ifdef DEBUG
-	usart_puts("Sent\r\n");
-#endif
-      }
-      usart_puts("Sending...\r\n");
-      delay_ms(500);
-      
-    }
-    
-    if(rfm12_haspacket())
-    {
-      byte = rfm12_getpacketptr();
-      for(i = 0; i < 3; i++)
-      {
-	if(string[i] != bufptr[(byte+i+2)&0x1FF])
-	{
-	  break;
-	}
-	
-	if(i == 2)
-	{
-	  switchled();
-	}
-      }
-      rfm12_clearpacket();
-    }
-    
-  }
-  
+  PORTD |= (1<<PD6);
   
   while(1);
   return 0;
+}
+
+ISR(INT0_vect)
+{
+  rfm12_int_vect();
+  //PORTD |= (1<<PD6);
+  //EIFR |= (1<<INTF0);
 }

@@ -8,9 +8,9 @@
 MCU = atmega644
 FORMAT = ihex
 TARGET = main
-SRC = $(TARGET).c spi.c rfm12.c usart.c
+SRC = $(TARGET).c spi.c rfm12.c rfm12phy.c rfm12mac.c rfm12llc.c  usart.c
 ASRC = 
-OPT = 2
+OPT = s
 
 # Name of this Makefile (used for "make depend").
 MAKEFILE = Makefile

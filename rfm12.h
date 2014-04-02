@@ -163,8 +163,6 @@
 
 #define BUFFER_SIZE 512
 
-#define RAND_BUFFER_SIZE 8
-
 #define RFM12_ESCAPECHAR 0xFE
 #define RFM12_EOF 0xFF
 
@@ -190,7 +188,7 @@ typedef enum RFM12_Transfer_Error
   RFM12_TRANSFER_STATUS_LOST_SIGNAL
 } RFM12_Transfer_Error_t;
 
-unsigned char *rfm12_init(void);
+void rfm12_init(uint16_t (*pRFM12_phy_exchangeWord)(uint16_t word), void (*pRFM12_phy_SPISelect) (void), void (*pRFM12_phy_SPIDeselect)(void), void (**prfm12_phy_int_vect)(void), bool (*prfm12_llc_nextLayerReceiveCallback)(uint8_t data, bool lastbyte), uint8_t (*prfm12_llc_nextLayerTransmitCallback)(void), uint16_t pownAddr);
 
 uint8_t rfm12_tx(char *buf, uint16_t length);
 bool rfm12_haspacket(void);

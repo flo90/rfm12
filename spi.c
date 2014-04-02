@@ -25,16 +25,38 @@
 void spi_init( uint8_t cfg, uint8_t spd )
 {
   DDRB |= (1<<PB5) | (1<<PB7) | (1<<PB4);
-  
+  PORTB |= (1<<PB4);
+
   SPCR = cfg;
   SPCR |= 0x03 & spd;
   SPSR &= ~( 1 << 0 );
   SPSR |= ( spd >> 2 );
+  
+  /*
+  SPCR = (1<<SPE) | (1<<SPR0) | (1<<MSTR);
+  SPSR = (1<<SPI2X);
+  */
 }
 
-unsigned char spi_exchangebyte( unsigned char data )
+uint8_t spi_exchangebyte( uint8_t data )
 {
   SPDR = data;
   while( ! (  SPSR & ( 1 << SPIF ) ) );
   return SPDR;
+}
+
+uint16_t spi_exchangeword( uint16_t data )
+{
+  uint16_t temp;
+  SPDR = (data>>8)&0xFF;
+  while( ! (  SPSR & ( 1 << SPIF ) ) );
+  
+  temp = (SPDR<<8);
+  
+  SPDR = (data)&0xFF;
+  while( ! (  SPSR & ( 1 << SPIF ) ) );
+  
+  temp |= SPDR;
+  
+  return temp;
 }

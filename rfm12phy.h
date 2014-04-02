@@ -34,10 +34,10 @@ typedef enum RFM12_PHY_CAP
 
 typedef enum RFM12_PHY_VDI
 {
-  VDI_FAST,
-  VDI_MEDIUM,
-  VDI_SLOW,
-  VDI_ALWAYSON
+  VDI_FAST = 0,
+  VDI_MEDIUM = 1,
+  VDI_SLOW = 2,
+  VDI_ALWAYSON = 3,
 } RFM12_PHY_VDI_t;
 
 typedef enum RFM12_PHY_BW
@@ -47,43 +47,43 @@ typedef enum RFM12_PHY_BW
   RFM12_PHY_BW270 = 3,
   RFM12_PHY_BW200 = 4,
   RFM12_PHY_BW134 = 5,
-  RFM12_PHY_BW67 = 6
+  RFM12_PHY_BW67 = 6,
 } RFM12_PHY_BW_t;
 
 typedef enum RFM12_PHY_LNAGAIN
 {
-  LNA_0,
-  LNA_MINUS6,
-  LNA_MINUS14,
-  LNA_MINUS20
+  LNA_0 = 0,
+  LNA_MINUS6 = 1,
+  LNA_MINUS14 = 2,
+  LNA_MINUS20 = 3,
 } RFM12_PHY_LNAGAIN_t;
 
 typedef enum RFM12_PHY_RSSIDTH
 {
-  RSSI_MINUS103,
-  RSSI_MINUS97,
-  RSSI_MINUS91,
-  RSSI_MINUS85,
-  RSSI_MINUS79,
-  RSSI_MINUS73,
-  RSSI_MINUS67,
-  RSSI_MINUS61
+  RSSI_MINUS103 = 0,
+  RSSI_MINUS97 = 1,
+  RSSI_MINUS91 = 2,
+  RSSI_MINUS85 = 3,
+  RSSI_MINUS79 = 4,
+  RSSI_MINUS73 = 5,
+  RSSI_MINUS67 = 6,
+  RSSI_MINUS61 = 7,
 } RFM12_PHY_RSSIDTH_t;
 
 typedef enum RFM12_PHY_AutoMode
 {
-  AUTOMODE_OFF,
-  AUTOMODE_POWERUP,
-  AUTOMODE_RECV,
-  AUTOMODE_INDEPENDENT
+  AUTOMODE_OFF = 0,
+  AUTOMODE_POWERUP = 1,
+  AUTOMODE_RECV = 2,
+  AUTOMODE_INDEPENDENT = 3
 } RFM12_PHY_AutoMode_t;
 
 typedef enum RFM12_PHY_RangeLimit
 {
-  RANGELIMIT_NORESTRICT,
-  RANGELIMIT_15toMINUS16,
-  RANGELIMIT_7toMINUS8,
-  RANGELIMIT_3toMINUS4
+  RANGELIMIT_NORESTRICT = 0,
+  RANGELIMIT_15toMINUS16 = 1,
+  RANGELIMIT_7toMINUS8 = 2,
+  RANGELIMIT_3toMINUS4 = 3,
 } RFM12_PHY_RangeLimit_t;
 
 typedef enum RFM12_PHY_FREQDEVIATION
@@ -95,14 +95,14 @@ typedef enum RFM12_PHY_FREQDEVIATION
 
 typedef enum RFM12_PHY_OutPwr
 {
-  OUTPWR_0,
-  OUTPWR_MINUS3,
-  OUTPWR_MINUS6,
-  OUTPWR_MINUS9,
-  OUTPWR_MINUS12,
-  OUTPWR_MINUS15,
-  OUTPWR_MINUS18,
-  OUTPWR_MINUS21
+  OUTPWR_0 = 0,
+  OUTPWR_MINUS3 = 1,
+  OUTPWR_MINUS6 = 2,
+  OUTPWR_MINUS9 = 3,
+  OUTPWR_MINUS12 = 4,
+  OUTPWR_MINUS15 = 5,
+  OUTPWR_MINUS18 = 6,
+  OUTPWR_MINUS21 = 7,
 } RFM12_PHY_OutPwr_t;
 
 typedef enum RFM12_PHY_State
@@ -124,7 +124,7 @@ typedef enum RFM12_PHY_BAUDRATE
   RFM12_PHY_BAUDRATE_115200 = 2
 } RFM12_PHY_BAUDRATE_t;
 
-void rfm12_phy_init(uint16_t (*pRFM12_phy_exchangeWord)(uint16_t word), void (*pRFM12_phy_SPISelect) (void), void (*pRFM12_phy_SPIDeselect)(void));
+void rfm12_phy_init(uint16_t (*pRFM12_phy_exchangeWord)(uint16_t word), void (*pRFM12_phy_SPISelect) (void), void (*pRFM12_phy_SPIDeselect)(void), void (**prfm12_phy_int_vect)(void));
 
 uint16_t rfm12_phy_SPIWrite(uint16_t data);
 

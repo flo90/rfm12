@@ -44,5 +44,6 @@
 void spi_init( uint8_t cfg, uint8_t spd );
 
 unsigned char spi_exchangebyte( unsigned char data );
+uint16_t spi_exchangeword( uint16_t data );
 
 #endif

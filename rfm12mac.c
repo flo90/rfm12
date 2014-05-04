@@ -25,16 +25,22 @@
 #include "rfm12llc.h"
 #include "rfm12channel.h"
 
+//----TEST----
+#include <avr/io.h>
+#include "usart.h"
+
 const uint8_t _rfm12_mac_sync[] = {0x2D, 0xD4};
 
-RFM12_MAC_State_t volatile macstate;
-volatile uint16_t length;
+RFM12_MAC_RX_State_t volatile rxmacstate;
+RFM12_MAC_TX_State_t volatile txmacstate;
+volatile uint16_t rxlength;
+volatile uint16_t txlength;
 
 bool (*rfm12_mac_nextLayerReceiveCallback)(uint8_t data) = NULL;
 
 void rfm12_mac_init()
 {
-  macstate = RFM12_MAC_STATE_IDLE;
+  rxmacstate = RFM12_MAC_RX_STATE_IDLE;
   rfm12_phy_modeRX();
 }
 
@@ -49,138 +55,153 @@ void rfm12_mac_setChannel(uint8_t chan, RFM12_PHY_VDI_t vdi, RFM12_PHY_LNAGAIN_t
 
 bool rfm12_mac_startTransmission(uint16_t plength)
 {
+  /*
   if(rfm12_phy_busy())
   {
     return false;
   }
-  length = plength;
-  macstate = RFM12_MAC_STATE_TX_PREAMBLE1;
-  rfm12_phy_modeTX();
-  return true;
+  */
+  txlength = plength;
+  txmacstate = RFM12_MAC_TX_STATE_PREAMBLE;
+  
+  return rfm12_phy_modeTX();;
 }
 
-bool rfm12_mac_previousLayerReceiveCallback(uint8_t data)
+bool rfm12_mac_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_t status)
 { 
   //just a cheap checksum to ensure that the length is not corrupted 
   static uint8_t checksum = 0;
-  
-  switch(macstate)
+
+  switch(rxmacstate)
   {
-    case RFM12_MAC_STATE_IDLE:
-      macstate = RFM12_MAC_STATE_LENGTH_HIGH;
+    case RFM12_MAC_RX_STATE_IDLE:
+      rxmacstate = RFM12_MAC_RX_STATE_LENGTH_HIGH;
       
-    case RFM12_MAC_STATE_LENGTH_HIGH:
-      length = (data<<8);
+    case RFM12_MAC_RX_STATE_LENGTH_HIGH:
+      rxlength = (data<<8);
       checksum = data;
-      macstate = RFM12_MAC_STATE_LENGTH_LOW;
+      rxmacstate = RFM12_MAC_RX_STATE_LENGTH_LOW;
       break;
 
-    case RFM12_MAC_STATE_LENGTH_LOW:
-      length |= data;
+    case RFM12_MAC_RX_STATE_LENGTH_LOW:
+      rxlength |= data&0xFF;
+      
+      if(rxlength > RFM12_MAX_FRAME_SIZE)
+      {
+	goto reset;
+      }
+      
       checksum += data;
-      macstate = RFM12_MAC_STATE_CHECKSUM;
+      rxmacstate = RFM12_MAC_RX_STATE_CHECKSUM;
       break;
 	  
-    case RFM12_MAC_STATE_CHECKSUM:
+    case RFM12_MAC_RX_STATE_CHECKSUM:
       if(checksum == data)
       {
-	macstate = RFM12_MAC_STATE_RXTX;
+	rxmacstate = RFM12_MAC_RX_STATE_RX;
       }
       
       else
       {
-	macstate = RFM12_MAC_STATE_IDLE;
-	return false;
+	goto reset;
       }
       break;
       
-    case RFM12_MAC_STATE_RXTX:
-      --length;
+    case RFM12_MAC_RX_STATE_RX:
+      --rxlength;
       
-      if(length)
+      if(rxlength)
       {
-	if(!rfm12_llc_previousLayerReceiveCallback(data, false))
+	if(!rfm12_llc_previousLayerReceiveCallback(data, status))
 	{
-	  macstate = RFM12_MAC_STATE_IDLE;
-	  return false;
+	  goto reset;
 	}
       }
       
       else
       {
-	rfm12_llc_previousLayerReceiveCallback(data, true);
-	macstate = RFM12_MAC_STATE_IDLE;
-	return false;
+	rfm12_llc_previousLayerReceiveCallback(data, RFM12_TRANSFER_STATUS_LASTBYTE);
+	goto reset;
       }
+      
       break;
   }
+  
+  if(status != RFM12_TRANSFER_STATUS_CONTINUE)
+  {
+    goto reset;
+  }
+  
   return true;
+  
+  reset:
+  rxmacstate = RFM12_MAC_RX_STATE_IDLE;
+  return false;
 }
 
 
 uint8_t rfm12_mac_previousLayerTransmitCallback(void)
 {
-  uint8_t temp = 0;
-  switch(macstate)
+  uint8_t temp = 0x00;
+  
+  switch(txmacstate)
   {
-    case RFM12_MAC_STATE_TX_PREAMBLE1:
+    case RFM12_MAC_TX_STATE_PREAMBLE:
       
-      macstate = RFM12_MAC_STATE_TX_PREAMBLE2;
+      txmacstate = RFM12_MAC_TX_STATE_SYNC0;
+      temp = 0xAA;
+      break;
+    
+    case RFM12_MAC_TX_STATE_SYNC0:
+      
+      txmacstate = RFM12_MAC_TX_STATE_SYNC1;
       temp = _rfm12_mac_sync[0];
       break;
       
-    case RFM12_MAC_STATE_TX_PREAMBLE2:
+    case RFM12_MAC_TX_STATE_SYNC1:
       
-      macstate = RFM12_MAC_STATE_LENGTH_HIGH;
+      txmacstate = RFM12_MAC_TX_STATE_LENGTH_HIGH;
       temp = _rfm12_mac_sync[1];
       break;
       
-    case RFM12_MAC_STATE_LENGTH_HIGH:
+    case RFM12_MAC_TX_STATE_LENGTH_HIGH:
       
-      macstate = RFM12_MAC_STATE_LENGTH_LOW;
-      temp = (length>>8)&0xFF;
+      txmacstate = RFM12_MAC_TX_STATE_LENGTH_LOW;
+      temp = (txlength>>8)&0xFF;
       break;
       
-    case RFM12_MAC_STATE_LENGTH_LOW:
+    case RFM12_MAC_TX_STATE_LENGTH_LOW:
       
-      macstate = RFM12_MAC_STATE_CHECKSUM;
-      temp = length&0xFF;
+      txmacstate = RFM12_MAC_TX_STATE_CHECKSUM;
+      temp = txlength&0xFF;
       break;
       
-    case RFM12_MAC_STATE_CHECKSUM:
-      macstate = RFM12_MAC_STATE_RXTX;
-      temp = (uint8_t)(( (length>>8) & 0xFF ) + ( (length) & 0xFF));
+    case RFM12_MAC_TX_STATE_CHECKSUM:
+      txmacstate = RFM12_MAC_TX_STATE_TX;
+      temp = (txlength>>8)&0xFF;
+      temp += txlength&0xFF;
       break;
       
-    case RFM12_MAC_STATE_RXTX:
-      --length;
+    case RFM12_MAC_TX_STATE_TX:
+      --txlength;
       
-      if(length)
+      if(txlength)
       {
-	
 	temp = rfm12_llc_previousLayerTransmitCallback();
       }
       
       else
       {
-	macstate = RFM12_MAC_STATE_TX_END;
+	txmacstate = RFM12_MAC_TX_STATE_END;
 	//just dummy byte
 	temp = 0xAA;
       }
       break;
       
-    case RFM12_MAC_STATE_TX_END:
-      macstate = RFM12_MAC_STATE_IDLE;
+    case RFM12_MAC_TX_STATE_END:
       rfm12_phy_modeRX();
       temp = 0xAA;
       break;
   }
-  
   return temp;
-}
-
-void rfm12_mac_resetStateMachine(RFM12_Transfer_Error_t err)
-{
-  macstate = RFM12_MAC_STATE_IDLE;
-  rfm12_llc_resetStateMachine(err);
 }

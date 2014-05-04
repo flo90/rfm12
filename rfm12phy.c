@@ -24,8 +24,9 @@
 #include "rfm12phy.h"
 #include "rfm12mac.h"
 
-//TEST
+//-----TEST-----
 #include <avr/io.h>
+#include "usart.h"
 
 void RFM12_phy_SPISelect(void)
 {
@@ -48,7 +49,6 @@ uint16_t rfm12_phy_SPIWrite( uint16_t data )
   while( ! (  SPSR & ( 1 << SPIF ) ) );
   RFM12_phy_SPIDeselect();
 
-  
   return 0;
 }
 
@@ -60,6 +60,7 @@ uint16_t rfm12_phy_SPIWrite( uint16_t data )
 RFM12_PHY_State_t volatile phystate;
 RFM12_PHY_RegStatus_t volatile regstatus;
 bool volatile enableDataHandling;
+bool volatile disableINT = false;
 
 static inline uint16_t __inline_rfm12_phy_getStatus(void)
 {
@@ -150,11 +151,28 @@ uint16_t rfm12_phy_SPIWrite(uint16_t data)
   return datareturned;
 }
 */
-void rfm12_phy_modeTX()
+bool rfm12_phy_modeTX()
 {
-  EIMSK = 0;
+  //check if the phy state is IDLE otherwise prevent transmit
+  if(phystate != RFM12_PHY_STATE_IDLE)
+  {
+    return false;
+  }
+  
+  //disable data handling - now the state machine is safe
+  enableDataHandling = false;
+  
+  //maybe there was an interrupt between cheking and disabling
+  //check again and enable data handling if the state machine is not in IDLE
+  if(phystate != RFM12_PHY_STATE_IDLE)
+  {
+    enableDataHandling = true;
+    return false;
+  }
+  
+  disableINT = true;
+  
   //disable receive
-  rfm12_phy_setFIFORst(8, false, false, false);
   __inline_rfm12_phy_disableRXTX();
   
   //write preamble
@@ -163,18 +181,25 @@ void rfm12_phy_modeTX()
   
   phystate = RFM12_PHY_STATE_TRANSMIT;
   __inline_rfm12_phy_getStatus();
+  
+  enableDataHandling = true;
+  disableINT = false;
+  
   __inline_rfm12_phy_startTX();
-  EIFR |= (1<<INTF0);
-  EIMSK = 1;
+  return true;
 }
 
 void rfm12_phy_modeRX()
 {
+  disableINT = true;
   __inline_rfm12_phy_disableRXTX();
+  phystate = RFM12_PHY_STATE_IDLE;
+  
+  rfm12_phy_setFIFORst(8, false, false, true);
   rfm12_phy_setFIFORst(8, false, true, true);
   __inline_rfm12_phy_getStatus();
   __inline_rfm12_phy_startRX();
-  
+  disableINT = false;
 }
 
 bool rfm12_phy_busy()
@@ -232,22 +257,33 @@ void rfm12_phy_setTxConf(bool mp, RFM12_PHY_FREQDEVIATION_t deviation, RFM12_PHY
 //This function should called by interrupt
 void rfm12_phy_int_vect()
 {
-  uint16_t status = __inline_rfm12_phy_getStatus();
-    
+  if(disableINT)
+  {
+    return;
+  }
+  uint16_t status = __inline_rfm12_phy_getStatus(); 
   //check if an FIFO interrupt occure and if data handling is enabled
-  if((status & RFM12_STATUSRD_RGIT_FFIT))
+  if((status & RFM12_STATUSRD_RGIT_FFIT) && enableDataHandling)
   {
     switch(phystate)
     {
       //IDLE is the default mode
       case RFM12_PHY_STATE_IDLE:
-	
 	phystate = RFM12_PHY_STATE_RECEIVE;
       
       case RFM12_PHY_STATE_RECEIVE:
+
+	if (!(status & RFM12_STATUSRD_ATS_RSSI))
+	{
+	  //lost signal here
+	  
+	  rfm12_mac_previousLayerReceiveCallback(0, RFM12_TRANSFER_STATUS_LOST_SIGNAL);
+	  
+	  rfm12_phy_modeRX();
+	  phystate = RFM12_PHY_STATE_IDLE;
+	}
 	
-	//get fifo byte and call the next layer with it
-	if(!rfm12_mac_previousLayerReceiveCallback(__inline_rfm12_phy_getFIFOByte()))
+	else if(!rfm12_mac_previousLayerReceiveCallback(__inline_rfm12_phy_getFIFOByte(), RFM12_TRANSFER_STATUS_CONTINUE))
 	{
 	  //if the next layer returns a false do the following:
 	  rfm12_phy_modeRX();
@@ -257,7 +293,6 @@ void rfm12_phy_int_vect()
 	
       case RFM12_PHY_STATE_TRANSMIT:
 	__inline_rfm12_phy_putFIFOByte(rfm12_mac_previousLayerTransmitCallback());
-	
 	break;
     }
   }

@@ -33,9 +33,13 @@
 
 #include <stdio.h>
 
+char txbuf[] = "Hallo";
 char rxbuf[10];
-uint8_t txbuf[] = "Hallo";
-uint8_t *txbufptr = txbuf;
+
+char *prxbuf = rxbuf;
+char *prxcompare = txbuf;
+char volatile *ptxbuf = txbuf;
+
 
 void delay_ms(uint16_t ms)
 {
@@ -47,7 +51,7 @@ void delay_ms(uint16_t ms)
 
 void switchled(void)
 {
-  static bool led = false;
+  static bool volatile led = false;
   if(led)
   {
     //PORTD = (1<<PD6);
@@ -56,7 +60,7 @@ void switchled(void)
   }
   else
   {
-    PORTD = (1<<PD5);
+    PORTD |= (1<<PD5);
     //PORTD &= ~(1<<PD6);
     led = true;
   }
@@ -74,18 +78,58 @@ void disablerfm12(void)
 
 void (*rfm12_int_vect)(void) = NULL;
 
-bool receive(uint8_t data, bool lastbyte)
+bool receive(uint8_t data, RFM12_Transfer_Status_t status)
 {
-  if(!lastbyte)
+  bool datatest = true;
+  
+  if(status == RFM12_TRANSFER_STATUS_LOST_SIGNAL)
   {
-    
+    goto reset;
   }
+  
+  if(status == RFM12_TRANSFER_STATUS_LASTBYTE)
+  { 
+    //switchled();
+    prxbuf = rxbuf;
+    prxbuf++;
+    prxbuf++;
+    while(*prxcompare)
+    {
+      if(*prxcompare != *prxbuf)
+      {
+	datatest = false;
+      }
+
+      prxcompare++;
+      prxbuf++;
+    }
+
+    if(datatest)
+    {
+      switchled();
+    }
+    goto reset;
+  }
+  
+  else
+  {
+    *prxbuf++ = data;
+  }
+  
   return true;
+  
+  reset:
+  prxbuf = rxbuf;
+  prxcompare = txbuf;
+  
+  return false;
+  
 }
 
 uint8_t transmit(void)
 {
-  return *txbufptr++;
+  uint8_t data = *ptxbuf++;
+  return data;
 }
 
 int main(void)
@@ -96,15 +140,14 @@ int main(void)
   
   //config interrupts
   
-  //EICRA |= (1<<ISC01);
+  EICRA |= (1<<ISC01);
   EIMSK |= (1<<INT0);
-  
-  //while(1);
   
   usart_init();
   spi_init(SPI_SPE | SPI_MSTR , SPI_CLK_8);
   
   rfm12_init( &spi_exchangeword, &enablerfm12, &disablerfm12, &rfm12_int_vect, &receive, &transmit, 1);
+  rfm12_llc_registerProto(0, &receive);
   
   //------------------PHY Layer TEST-----------------------
   /*
@@ -121,8 +164,6 @@ int main(void)
   rfm12_phy_modeRX();
   */
   
-  
-  
   PORTD |= (1<<PD6);
   
   delay_ms(500);
@@ -134,11 +175,19 @@ int main(void)
   EIFR |= (1<<INTF0);
   
   sei();
-
-  delay_ms(1000);
-  //rfm12_llc_startTX(1, sizeof(txbuf));
   
+  delay_ms(500);
   PORTD |= (1<<PD6);
+  
+  while(1)
+  {
+    delay_ms(500);
+    ptxbuf = txbuf;
+    if(rfm12_llc_startTX(1, 0, sizeof(txbuf)))
+    {
+      usart_puts_nonblock("TX Data");
+    }
+  }
   
   while(1);
   return 0;
@@ -147,6 +196,4 @@ int main(void)
 ISR(INT0_vect)
 {
   rfm12_int_vect();
-  //PORTD |= (1<<PD6);
-  //EIFR |= (1<<INTF0);
 }

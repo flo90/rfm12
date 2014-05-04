@@ -19,11 +19,15 @@
 #ifndef _USART_H_
 #define _USART_H_
 
+#include <stdbool.h>
+
 void usart_init(void);
 
 void usart_putc( char c );
 
 void usart_putc_nonblock( char c );
+
+bool usart_puts_nonblock(char *data);
 
 void usart_puts( char *data );
 

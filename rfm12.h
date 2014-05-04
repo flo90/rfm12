@@ -163,6 +163,8 @@
 
 #define BUFFER_SIZE 512
 
+#define RFM12_MAX_FRAME_SIZE 512
+
 #define RFM12_ESCAPECHAR 0xFE
 #define RFM12_EOF 0xFF
 
@@ -182,13 +184,15 @@ typedef struct
   uint8_t nextbyte;
 }randombufferstate;
 
-typedef enum RFM12_Transfer_Error
+typedef enum RFM12_Transfer_Status
 {
+  RFM12_TRANSFER_STATUS_CONTINUE,
+  RFM12_TRANSFER_STATUS_LASTBYTE,
   RFM12_TRANSFER_STATUS_PAKET_CORRUPT,
   RFM12_TRANSFER_STATUS_LOST_SIGNAL
-} RFM12_Transfer_Error_t;
+} RFM12_Transfer_Status_t;
 
-void rfm12_init(uint16_t (*pRFM12_phy_exchangeWord)(uint16_t word), void (*pRFM12_phy_SPISelect) (void), void (*pRFM12_phy_SPIDeselect)(void), void (**prfm12_phy_int_vect)(void), bool (*prfm12_llc_nextLayerReceiveCallback)(uint8_t data, bool lastbyte), uint8_t (*prfm12_llc_nextLayerTransmitCallback)(void), uint16_t pownAddr);
+void rfm12_init(uint16_t (*pRFM12_phy_exchangeWord)(uint16_t word), void (*pRFM12_phy_SPISelect) (void), void (*pRFM12_phy_SPIDeselect)(void), void (**prfm12_phy_int_vect)(void), bool (*prfm12_llc_nextLayerReceiveCallback)(uint8_t data, RFM12_Transfer_Status_t status), uint8_t (*prfm12_llc_nextLayerTransmitCallback)(void), uint16_t pownAddr);
 
 uint8_t rfm12_tx(char *buf, uint16_t length);
 bool rfm12_haspacket(void);

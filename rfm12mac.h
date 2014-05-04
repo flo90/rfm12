@@ -9,17 +9,26 @@
 
 #include "rfm12.h"
 
-typedef enum RFM12_MAC_State
+typedef enum RFM12_MAC_RX_State
 {
-  RFM12_MAC_STATE_IDLE,
-  RFM12_MAC_STATE_LENGTH_LOW,
-  RFM12_MAC_STATE_LENGTH_HIGH,
-  RFM12_MAC_STATE_CHECKSUM,
-  RFM12_MAC_STATE_RXTX,
-  RFM12_MAC_STATE_TX_PREAMBLE1,
-  RFM12_MAC_STATE_TX_PREAMBLE2,
-  RFM12_MAC_STATE_TX_END
-} RFM12_MAC_State_t;
+  RFM12_MAC_RX_STATE_IDLE,
+  RFM12_MAC_RX_STATE_LENGTH_LOW,
+  RFM12_MAC_RX_STATE_LENGTH_HIGH,
+  RFM12_MAC_RX_STATE_CHECKSUM,
+  RFM12_MAC_RX_STATE_RX,
+} RFM12_MAC_RX_State_t;
+
+typedef enum RFM12_MAC_TX_State
+{
+  RFM12_MAC_TX_STATE_PREAMBLE,
+  RFM12_MAC_TX_STATE_LENGTH_LOW,
+  RFM12_MAC_TX_STATE_LENGTH_HIGH,
+  RFM12_MAC_TX_STATE_CHECKSUM,
+  RFM12_MAC_TX_STATE_TX,
+  RFM12_MAC_TX_STATE_SYNC0,
+  RFM12_MAC_TX_STATE_SYNC1,
+  RFM12_MAC_TX_STATE_END
+} RFM12_MAC_TX_State_t;
 
 typedef struct RFM12_MAC_Channel
 {
@@ -29,12 +38,10 @@ typedef struct RFM12_MAC_Channel
   uint16_t frequency;
 } RFM12_MAC_Channel_t;
 
-bool rfm12_mac_previousLayerReceiveCallback(uint8_t data);
+bool rfm12_mac_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_t status);
 uint8_t rfm12_mac_previousLayerTransmitCallback(void);
 
 void rfm12_mac_init(void);
-
-void rfm12_mac_resetStateMachine(RFM12_Transfer_Error_t err);
 
 void rfm12_mac_setChannel(uint8_t chan, RFM12_PHY_VDI_t vdi, RFM12_PHY_LNAGAIN_t lna, RFM12_PHY_RSSIDTH_t rssiDTh, RFM12_PHY_OutPwr_t pwr);
 

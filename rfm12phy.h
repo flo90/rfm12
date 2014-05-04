@@ -128,7 +128,7 @@ void rfm12_phy_init(uint16_t (*pRFM12_phy_exchangeWord)(uint16_t word), void (*p
 
 uint16_t rfm12_phy_SPIWrite(uint16_t data);
 
-void rfm12_phy_modeTX(void);
+bool rfm12_phy_modeTX(void);
 void rfm12_phy_modeRX(void);
 bool rfm12_phy_busy(void);
 

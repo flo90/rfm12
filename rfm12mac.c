@@ -41,7 +41,6 @@ bool (*rfm12_mac_nextLayerReceiveCallback)(uint8_t data) = NULL;
 void rfm12_mac_init()
 {
   rxmacstate = RFM12_MAC_RX_STATE_IDLE;
-  rfm12_phy_modeRX();
 }
 
 void rfm12_mac_setChannel(uint8_t chan, RFM12_PHY_VDI_t vdi, RFM12_PHY_LNAGAIN_t lna, RFM12_PHY_RSSIDTH_t rssiDTh, RFM12_PHY_OutPwr_t pwr)
@@ -55,16 +54,10 @@ void rfm12_mac_setChannel(uint8_t chan, RFM12_PHY_VDI_t vdi, RFM12_PHY_LNAGAIN_t
 
 bool rfm12_mac_startTransmission(uint16_t plength)
 {
-  /*
-  if(rfm12_phy_busy())
-  {
-    return false;
-  }
-  */
   txlength = plength;
   txmacstate = RFM12_MAC_TX_STATE_PREAMBLE;
   
-  return rfm12_phy_modeTX();;
+  return rfm12_phy_modeTX();
 }
 
 bool rfm12_mac_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_t status)

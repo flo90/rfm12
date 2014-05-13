@@ -37,7 +37,6 @@ void rfm12_init(uint16_t (*pRFM12_phy_exchangeWord)(uint16_t word), void (*pRFM1
   rfm12_llc_init(prfm12_llc_nextLayerReceiveCallback, prfm12_llc_nextLayerTransmitCallback, pownAddr);
   
   
-  
   rfm12_phy_setConf( true, true, FREQBAND_433MHz, CAP12_5pf);
   
   //enable everything except additional module features
@@ -48,5 +47,7 @@ void rfm12_init(uint16_t (*pRFM12_phy_exchangeWord)(uint16_t word), void (*pRFM1
   rfm12_phy_setAFC(AUTOMODE_RECV, RANGELIMIT_3toMINUS4, false, true, true, true);
   
   rfm12_mac_setChannel(1, VDI_FAST, LNA_0, RSSI_MINUS97, OUTPWR_0);
+  
+  rfm12_phy_modeRX();
   
 }

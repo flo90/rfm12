@@ -28,85 +28,37 @@
 #include <avr/io.h>
 #include "usart.h"
 
-void RFM12_phy_SPISelect(void)
-{
-  PORTB &= ~(1<<PB4);
-}
-
-void RFM12_phy_SPIDeselect(void)
-{
-  PORTB |= (1<<PB4);
-}
-
-uint16_t rfm12_phy_SPIWrite( uint16_t data )
-{
-  //--------TEST---------
-  RFM12_phy_SPISelect();
-  SPDR = (data>>8);
-  while( ! (  SPSR & ( 1 << SPIF ) ) );
-  
-  SPDR = (data);
-  while( ! (  SPSR & ( 1 << SPIF ) ) );
-  RFM12_phy_SPIDeselect();
-
-  return 0;
-}
-
-//--------TEST---------
-//uint16_t (*RFM12_phy_exchangeWord)(uint16_t word) = NULL;
-//void (*RFM12_phy_SPISelect) (void) = NULL;
-//void (*RFM12_phy_SPIDeselect)(void) = NULL;
+uint16_t (*RFM12_phy_exchangeWord)(uint16_t word) = NULL;
+void (*RFM12_phy_SPISelect) (void) = NULL;
+void (*RFM12_phy_SPIDeselect)(void) = NULL;
 
 RFM12_PHY_State_t volatile phystate;
 RFM12_PHY_RegStatus_t volatile regstatus;
 bool volatile enableDataHandling;
 bool volatile disableINT = false;
 
+uint16_t rfm12_phy_SPIWrite( uint16_t data )
+{
+  uint16_t temp;
+  RFM12_phy_SPISelect();
+  temp = RFM12_phy_exchangeWord(data);
+  RFM12_phy_SPIDeselect();
+  return temp;
+}
+
 static inline uint16_t __inline_rfm12_phy_getStatus(void)
 {
-  //return rfm12_phy_SPIWrite(RFM12_STATUSRD);
-  
-  //--------TEST---------
-  uint16_t status;
-  RFM12_phy_SPISelect();
-  SPDR = 0;
-  while( ! (  SPSR & ( 1 << SPIF ) ) );
-  status = SPDR<<8;
-  SPDR = 0;
-  while( ! (  SPSR & ( 1 << SPIF ) ) );
-  RFM12_phy_SPIDeselect();
-  status |= SPDR;
-  return status;
+  return rfm12_phy_SPIWrite(RFM12_STATUSRD);
 }
 
 static inline uint8_t __inline_rfm12_phy_getFIFOByte(void)
 {
-  //return rfm12_phy_SPIWrite(RFM12_RXFIFORD) & 0xFF;
-  
-  //--------TEST---------
-  RFM12_phy_SPISelect();
-  SPDR = RFM12_RXFIFORD>>8;
-  while( ! (  SPSR & ( 1 << SPIF ) ) );
-  SPDR = RFM12_RXFIFORD&0xFF;
-  while( ! (  SPSR & ( 1 << SPIF ) ) );
-  RFM12_phy_SPIDeselect();
-  return SPDR;
+  return rfm12_phy_SPIWrite(RFM12_RXFIFORD) & 0xFF;
 }
 
 static inline void __inline_rfm12_phy_putFIFOByte(uint8_t data)
 {
-  //rfm12_phy_SPIWrite(RFM12_TXWR + data);
-  
-  //--------TEST---------
-  RFM12_phy_SPISelect();
-  SPDR = RFM12_TXWR>>8;
-  while( ! (  SPSR & ( 1 << SPIF ) ) );
-  
-  SPDR = (data)&0xFF;
-  while( ! (  SPSR & ( 1 << SPIF ) ) );
-  
-  RFM12_phy_SPIDeselect();
-  
+  rfm12_phy_SPIWrite(RFM12_TXWR + data);
 }
 
 static inline void __inline_rfm12_phy_startTX(void)
@@ -131,26 +83,14 @@ void rfm12_phy_init(uint16_t (*pRFM12_phy_exchangeWord)(uint16_t word), void (*p
 {
   *prfm12_phy_int_vect = &rfm12_phy_int_vect;
   
-  
-  //--------TEST---------
-  //RFM12_phy_exchangeWord = pRFM12_phy_exchangeWord;
-  //RFM12_phy_SPISelect = pRFM12_phy_SPISelect;
-  //RFM12_phy_SPIDeselect = pRFM12_phy_SPIDeselect;
+  RFM12_phy_exchangeWord = pRFM12_phy_exchangeWord;
+  RFM12_phy_SPISelect = pRFM12_phy_SPISelect;
+  RFM12_phy_SPIDeselect = pRFM12_phy_SPIDeselect;
   
   phystate = RFM12_PHY_STATE_IDLE;
   
 }
 
-/*
-uint16_t rfm12_phy_SPIWrite(uint16_t data)
-{
-  uint16_t datareturned;
-  RFM12_phy_SPISelect();
-  datareturned = RFM12_phy_exchangeWord(data);
-  RFM12_phy_SPIDeselect();
-  return datareturned;
-}
-*/
 bool rfm12_phy_modeTX()
 {
   //check if the phy state is IDLE otherwise prevent transmit

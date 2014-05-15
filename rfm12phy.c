@@ -139,6 +139,7 @@ void rfm12_phy_modeRX()
   rfm12_phy_setFIFORst(8, false, true, true);
   __inline_rfm12_phy_getStatus();
   __inline_rfm12_phy_startRX();
+  enableDataHandling = true;
   disableINT = false;
 }
 
@@ -213,7 +214,7 @@ void rfm12_phy_int_vect()
       
       case RFM12_PHY_STATE_RECEIVE:
 
-	if (!(status & RFM12_STATUSRD_ATS_RSSI))
+	if (!(status & RFM12_STATUSRD_ATS_RSSI) && 0)
 	{
 	  //lost signal here
 	  

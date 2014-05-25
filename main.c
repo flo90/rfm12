@@ -76,7 +76,18 @@ void disablerfm12(void)
   PORTB |= (1<<PB4);
 }
 
+void enableINT0(void)
+{
+  EIMSK = (1<<INT0);
+}
+
+void disableINT0(void)
+{
+  EIMSK = 0;
+}
+
 void (*rfm12_int_vect)(void) = NULL;
+
 
 bool receive(uint8_t data, RFM12_Transfer_Status_t status)
 {
@@ -132,6 +143,8 @@ uint8_t transmit(void)
   return data;
 }
 
+RFM12_PHY_FUNCPTR_t rfm12funcptr;
+
 int main(void)
 {
   //init ports
@@ -140,13 +153,20 @@ int main(void)
   
   //config interrupts
   
-  EICRA |= (1<<ISC01);
+  //EICRA |= (1<<ISC01);
   EIMSK |= (1<<INT0);
   
   usart_init();
   spi_init(SPI_SPE | SPI_MSTR , SPI_CLK_8);
   
-  rfm12_init( &spi_exchangeword, &enablerfm12, &disablerfm12, &rfm12_int_vect, &receive, &transmit, 1);
+  rfm12funcptr.exchangeWord = &spi_exchangeword;
+  rfm12funcptr.SPISelect = &enablerfm12;
+  rfm12funcptr.SPIDeselect = &disablerfm12;
+  rfm12funcptr.enableINT = &enableINT0;
+  rfm12funcptr.disableINT = &disableINT0;
+  
+  
+  rfm12_init( rfm12funcptr, &receive, &transmit, 1);
   rfm12_llc_registerProto(0, &receive);
   
   //------------------PHY Layer TEST-----------------------
@@ -195,5 +215,5 @@ int main(void)
 
 ISR(INT0_vect)
 {
-  rfm12_int_vect();
+  rfm12_phy_int_vect();
 }

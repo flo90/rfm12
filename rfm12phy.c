@@ -28,21 +28,17 @@
 #include <avr/io.h>
 #include "usart.h"
 
-uint16_t (*RFM12_phy_exchangeWord)(uint16_t word) = NULL;
-void (*RFM12_phy_SPISelect) (void) = NULL;
-void (*RFM12_phy_SPIDeselect)(void) = NULL;
+RFM12_PHY_FUNCPTR_t funcptr;
 
 RFM12_PHY_State_t volatile phystate;
 RFM12_PHY_RegStatus_t volatile regstatus;
-bool volatile enableDataHandling;
-bool volatile disableINT = false;
 
 uint16_t rfm12_phy_SPIWrite( uint16_t data )
 {
   uint16_t temp;
-  RFM12_phy_SPISelect();
-  temp = RFM12_phy_exchangeWord(data);
-  RFM12_phy_SPIDeselect();
+  funcptr.SPISelect();
+  temp = funcptr.exchangeWord(data);
+  funcptr.SPIDeselect();
   return temp;
 }
 
@@ -79,13 +75,11 @@ static inline void __inline_rfm12_phy_disableRXTX(void)
   rfm12_phy_SPIWrite(RFM12_PWRMGM | regstatus.PWRMGMT);
 }
 
-void rfm12_phy_init(uint16_t (*pRFM12_phy_exchangeWord)(uint16_t word), void (*pRFM12_phy_SPISelect) (void), void (*pRFM12_phy_SPIDeselect)(void), void (**prfm12_phy_int_vect)(void))
+void rfm12_phy_init(RFM12_PHY_FUNCPTR_t pfuncptr)
 {
-  *prfm12_phy_int_vect = &rfm12_phy_int_vect;
-  
-  RFM12_phy_exchangeWord = pRFM12_phy_exchangeWord;
-  RFM12_phy_SPISelect = pRFM12_phy_SPISelect;
-  RFM12_phy_SPIDeselect = pRFM12_phy_SPIDeselect;
+  //*(funcptr.rfm12_phy_int_vect) = &rfm12_phy_int_vect;
+ 
+  funcptr = pfuncptr;
   
   phystate = RFM12_PHY_STATE_IDLE;
   
@@ -99,18 +93,16 @@ bool rfm12_phy_modeTX()
     return false;
   }
   
-  //disable data handling - now the state machine is safe
-  enableDataHandling = false;
+  //disable interrupt
+  funcptr.disableINT();
   
   //maybe there was an interrupt between cheking and disabling
   //check again and enable data handling if the state machine is not in IDLE
   if(phystate != RFM12_PHY_STATE_IDLE)
   {
-    enableDataHandling = true;
+    funcptr.enableINT();
     return false;
   }
-  
-  disableINT = true;
   
   //disable receive
   __inline_rfm12_phy_disableRXTX();
@@ -121,9 +113,8 @@ bool rfm12_phy_modeTX()
   
   phystate = RFM12_PHY_STATE_TRANSMIT;
   __inline_rfm12_phy_getStatus();
-  
-  enableDataHandling = true;
-  disableINT = false;
+
+  funcptr.enableINT();
   
   __inline_rfm12_phy_startTX();
   return true;
@@ -131,7 +122,7 @@ bool rfm12_phy_modeTX()
 
 void rfm12_phy_modeRX()
 {
-  disableINT = true;
+  funcptr.disableINT();
   __inline_rfm12_phy_disableRXTX();
   phystate = RFM12_PHY_STATE_IDLE;
   
@@ -139,8 +130,7 @@ void rfm12_phy_modeRX()
   rfm12_phy_setFIFORst(8, false, true, true);
   __inline_rfm12_phy_getStatus();
   __inline_rfm12_phy_startRX();
-  enableDataHandling = true;
-  disableINT = false;
+  funcptr.enableINT();
 }
 
 bool rfm12_phy_busy()
@@ -198,13 +188,15 @@ void rfm12_phy_setTxConf(bool mp, RFM12_PHY_FREQDEVIATION_t deviation, RFM12_PHY
 //This function should called by interrupt
 void rfm12_phy_int_vect()
 {
+  /*
   if(disableINT)
   {
     return;
   }
+  */
   uint16_t status = __inline_rfm12_phy_getStatus(); 
-  //check if an FIFO interrupt occure and if data handling is enabled
-  if((status & RFM12_STATUSRD_RGIT_FFIT) && enableDataHandling)
+  //check if an FIFO interrupt occure
+  if((status & RFM12_STATUSRD_RGIT_FFIT))
   {
     switch(phystate)
     {

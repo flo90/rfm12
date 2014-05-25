@@ -28,9 +28,9 @@
 #include "rfm12mac.h"
 #include "rfm12llc.h"
 
-void rfm12_init(uint16_t (*pRFM12_phy_exchangeWord)(uint16_t word), void (*pRFM12_phy_SPISelect) (void), void (*pRFM12_phy_SPIDeselect)(void), void (**prfm12_phy_int_vect)(void), bool (*prfm12_llc_nextLayerReceiveCallback)(uint8_t data, RFM12_Transfer_Status_t status), uint8_t (*prfm12_llc_nextLayerTransmitCallback)(void), uint16_t pownAddr)
+void rfm12_init(RFM12_PHY_FUNCPTR_t pfuncptr, bool (*prfm12_llc_nextLayerReceiveCallback)(uint8_t data, RFM12_Transfer_Status_t status), uint8_t (*prfm12_llc_nextLayerTransmitCallback)(void), uint16_t pownAddr)
 {
-  rfm12_phy_init(pRFM12_phy_exchangeWord, pRFM12_phy_SPISelect, pRFM12_phy_SPIDeselect, prfm12_phy_int_vect);
+  rfm12_phy_init(pfuncptr);
   
   rfm12_mac_init();
   

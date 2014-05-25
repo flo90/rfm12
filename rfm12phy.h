@@ -124,7 +124,24 @@ typedef enum RFM12_PHY_BAUDRATE
   RFM12_PHY_BAUDRATE_115200 = 2
 } RFM12_PHY_BAUDRATE_t;
 
-void rfm12_phy_init(uint16_t (*pRFM12_phy_exchangeWord)(uint16_t word), void (*pRFM12_phy_SPISelect) (void), void (*pRFM12_phy_SPIDeselect)(void), void (**prfm12_phy_int_vect)(void));
+typedef uint16_t (*RFM12_phy_exchangeWord)(uint16_t word);
+typedef void (*RFM12_phy_SPISelect) (void);
+typedef void (*RFM12_phy_SPIDeselect)(void);
+typedef void (*RFM12_phy_enableINT)(void);
+typedef void (*RFM12_phy_disableINT)(void);
+//typedef void (**rfm12_phy_int_vect)(void);
+
+typedef struct RFM12_PHY_FUNCPTR
+{
+  RFM12_phy_exchangeWord exchangeWord;
+  RFM12_phy_SPISelect SPISelect;
+  RFM12_phy_SPIDeselect SPIDeselect;
+  RFM12_phy_enableINT enableINT;
+  RFM12_phy_disableINT disableINT;
+  //rfm12_phy_int_vect int_vect;
+}RFM12_PHY_FUNCPTR_t;
+
+void rfm12_phy_init(RFM12_PHY_FUNCPTR_t funcptr);
 
 uint16_t rfm12_phy_SPIWrite(uint16_t data);
 

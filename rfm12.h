@@ -22,6 +22,8 @@
 #include <inttypes.h>
 #include <stdbool.h>
 
+#include "rfm12phy.h"
+
 //Configuration Setting Command
 #define RFM12_CFGSET 0x8000
 
@@ -192,7 +194,7 @@ typedef enum RFM12_Transfer_Status
   RFM12_TRANSFER_STATUS_LOST_SIGNAL
 } RFM12_Transfer_Status_t;
 
-void rfm12_init(uint16_t (*pRFM12_phy_exchangeWord)(uint16_t word), void (*pRFM12_phy_SPISelect) (void), void (*pRFM12_phy_SPIDeselect)(void), void (**prfm12_phy_int_vect)(void), bool (*prfm12_llc_nextLayerReceiveCallback)(uint8_t data, RFM12_Transfer_Status_t status), uint8_t (*prfm12_llc_nextLayerTransmitCallback)(void), uint16_t pownAddr);
+void rfm12_init(RFM12_PHY_FUNCPTR_t pfuncptr, bool (*prfm12_llc_nextLayerReceiveCallback)(uint8_t data, RFM12_Transfer_Status_t status), uint8_t (*prfm12_llc_nextLayerTransmitCallback)(void), uint16_t pownAddr);
 
 uint8_t rfm12_tx(char *buf, uint16_t length);
 bool rfm12_haspacket(void);

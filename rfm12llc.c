@@ -27,6 +27,9 @@
 //---TEST---
 #include "usart.h"
 
+#define LLC_BROADCAST_ADDR 0x7FFF
+#define LLC_SERVICE_COUNT 10
+
 //state machine
 RFM12_LLC_RX_State_t volatile rxllcstate;
 RFM12_LLC_TX_State_t volatile txllcstate;
@@ -34,19 +37,23 @@ RFM12_LLC_TX_State_t volatile txllcstate;
 RFM12_LLC_Header_t volatile rxheader;
 RFM12_LLC_Header_t volatile txheader;
 
-//the addr of the System
-uint16_t volatile ownAddr;
+RFM12_LLC_t llcconfig;
 
 //interface to next layer
 uint8_t (*rfm12_llc_nextLayerTransmitCallback)(void);
-bool (*rfm12_llc_nextLayerReceiveCallback[10])(uint8_t data, RFM12_Transfer_Status_t status);
+bool (*rfm12_llc_nextLayerReceiveCallback[LLC_SERVICE_COUNT])(uint8_t data, RFM12_Transfer_Status_t status);
 
 //init
-void rfm12_llc_init(bool (*prfm12_llc_nextLayerReceiveCallback)(uint8_t data, RFM12_Transfer_Status_t status), uint8_t (*prfm12_llc_nextLayerTransmitCallback)(void), uint16_t pownAddr )
+void rfm12_llc_init(uint8_t (*prfm12_llc_nextLayerTransmitCallback)(void), uint16_t pownAddr )
 {
-  ownAddr = pownAddr;
+  llcconfig.ownAddr = pownAddr;
+  llcconfig.grps = 0;
   rxllcstate = RFM12_LLC_RX_STATE_IDLE;
   
+  for(uint16_t i = 0; i< LLC_SERVICE_COUNT; i++)
+  {
+    rfm12_llc_nextLayerReceiveCallback[i] = NULL;
+  }
   
   rfm12_llc_nextLayerTransmitCallback = prfm12_llc_nextLayerTransmitCallback;
 }
@@ -54,13 +61,13 @@ void rfm12_llc_init(bool (*prfm12_llc_nextLayerReceiveCallback)(uint8_t data, RF
 //its possible to change the addr with this
 void rfm12_llc_setAddr(uint16_t addr)
 {
-  ownAddr = addr;
+  llcconfig.ownAddr = addr;
 }
 
 bool rfm12_llc_startTX(uint16_t dst, uint8_t service, uint16_t length)
 {
   txheader.dstAddr = dst;
-  txheader.srcAddr = ownAddr;
+  txheader.srcAddr = llcconfig.ownAddr;
   txheader.length = length;
   txheader.service = service;
   txllcstate = RFM12_LLC_TX_STATE_DST_HIGH;
@@ -84,10 +91,22 @@ bool rfm12_llc_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_
       rxheader.dstAddr |= data;
       rxllcstate = RFM12_LLC_RX_STATE_SRC_HIGH;
       
-      if(rxheader.dstAddr != ownAddr)
+      if(rxheader.dstAddr & RFM12_LLC_GROUP_SIGN)
       {
-	rxllcstate = RFM12_LLC_RX_STATE_IDLE;
-	goto reset;
+	//check if we are in any group
+	if(!(rxheader.dstAddr & llcconfig.grps))
+	{
+	  goto reset;
+	}
+      }
+      
+      else
+      {
+	//only check address
+	if(rxheader.dstAddr != llcconfig.ownAddr && rxheader.dstAddr != LLC_BROADCAST_ADDR)
+	{
+	  goto reset;
+	}
       }
       break;
       
@@ -104,11 +123,15 @@ bool rfm12_llc_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_
     case RFM12_LLC_RX_STATE_SERVICE:
       rxllcstate = RFM12_LLC_RX_STATE_PUT_SRC_ADDR;
       rxheader.service = data;
+      if(!rfm12_llc_nextLayerReceiveCallback[rxheader.service])
+      {
+	goto reset;
+      }
       break;
       
     case RFM12_LLC_RX_STATE_PUT_SRC_ADDR:
       rxllcstate = RFM12_LLC_RX_STATE_RX;
-      if(!rfm12_llc_nextLayerReceiveCallback[0](rxheader.srcAddr>>8, status) || !rfm12_llc_nextLayerReceiveCallback[0](rxheader.srcAddr&0xFF, status))
+      if(!rfm12_llc_nextLayerReceiveCallback[rxheader.service](rxheader.srcAddr>>8, status) || !rfm12_llc_nextLayerReceiveCallback[rxheader.service](rxheader.srcAddr&0xFF, status))
       {
 	usart_putc('E');
 	goto reset;
@@ -117,7 +140,7 @@ bool rfm12_llc_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_
     case RFM12_LLC_RX_STATE_RX:
       if(status != RFM12_TRANSFER_STATUS_LASTBYTE)
       {
-	if(!rfm12_llc_nextLayerReceiveCallback[0](data, status))
+	if(!rfm12_llc_nextLayerReceiveCallback[rxheader.service](data, status))
 	{
 	  usart_putc('F');
 	  goto reset;
@@ -127,7 +150,7 @@ bool rfm12_llc_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_
       else
       {
 	//this was the last byte - clean up
-	rfm12_llc_nextLayerReceiveCallback[0](data, status);
+	rfm12_llc_nextLayerReceiveCallback[rxheader.service](data, status);
 	goto reset;
       }
       break;

@@ -77,8 +77,6 @@ static inline void __inline_rfm12_phy_disableRXTX(void)
 
 void rfm12_phy_init(RFM12_PHY_FUNCPTR_t pfuncptr)
 {
-  //*(funcptr.rfm12_phy_int_vect) = &rfm12_phy_int_vect;
- 
   funcptr = pfuncptr;
   
   phystate = RFM12_PHY_STATE_IDLE;
@@ -188,12 +186,6 @@ void rfm12_phy_setTxConf(bool mp, RFM12_PHY_FREQDEVIATION_t deviation, RFM12_PHY
 //This function should called by interrupt
 void rfm12_phy_int_vect()
 {
-  /*
-  if(disableINT)
-  {
-    return;
-  }
-  */
   uint16_t status = __inline_rfm12_phy_getStatus(); 
   //check if an FIFO interrupt occure
   if((status & RFM12_STATUSRD_RGIT_FFIT))
@@ -206,11 +198,10 @@ void rfm12_phy_int_vect()
       
       case RFM12_PHY_STATE_RECEIVE:
 
-	if (!(status & RFM12_STATUSRD_ATS_RSSI) && 0)
+	if (status & RFM12_STATUSRD_RGUR_FFOV)
 	{
-	  //lost signal here
-	  
-	  rfm12_mac_previousLayerReceiveCallback(0, RFM12_TRANSFER_STATUS_LOST_SIGNAL);
+	  //Buffer overflow Error - STOP
+	  rfm12_mac_previousLayerReceiveCallback(0, RFM12_TRANSFER_STATUS_BUF_OVF);
 	  
 	  rfm12_phy_modeRX();
 	  phystate = RFM12_PHY_STATE_IDLE;

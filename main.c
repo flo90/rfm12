@@ -166,7 +166,7 @@ int main(void)
   rfm12funcptr.disableINT = &disableINT0;
   
   
-  rfm12_init( rfm12funcptr, &receive, &transmit, 1);
+  rfm12_init( rfm12funcptr, &transmit, 1);
   rfm12_llc_registerProto(0, &receive);
   
   //------------------PHY Layer TEST-----------------------

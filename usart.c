@@ -75,11 +75,6 @@ void usart_putc( char c )
   while( ! ( UCSR0A & (  1 << UDRE0 ) ) );
 }
 
-void usart_putc_nonblock( char c )
-{
-  UDR0 = c;
-}
-
 void usart_puts( char *data )
 {
   while( *data )
@@ -112,6 +107,19 @@ bool usart_puts_nonblock(char *data)
     msgbuf[pread++] = 0;
   }
   
+  return true;
+}
+
+bool usart_putc_nonblock(char data)
+{
+  msgbuf[pwrite++] = data;
+  
+  if(!running)
+  {
+    running = true;
+    UDR0 = msgbuf[pread];
+    msgbuf[pread++] = 0;
+  }
   return true;
 }
 

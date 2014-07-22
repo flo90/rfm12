@@ -34,7 +34,9 @@ void rfm12_init(RFM12_PHY_FUNCPTR_t pfuncptr, uint8_t (*prfm12_llc_nextLayerTran
   
   rfm12_mac_init();
   
-  rfm12_llc_init(prfm12_llc_nextLayerTransmitCallback, pownAddr);
+  rfm12_mac_setAddr(pownAddr);
+  
+  rfm12_llc_init(prfm12_llc_nextLayerTransmitCallback);
   
   
   rfm12_phy_setConf( true, true, FREQBAND_433MHz, CAP12_5pf);

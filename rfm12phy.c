@@ -109,18 +109,25 @@ bool rfm12_phy_modeTX()
   __inline_rfm12_phy_putFIFOByte(0xAA);
   __inline_rfm12_phy_putFIFOByte(0xAA);
   
+  //set the state machine to transmit
   phystate = RFM12_PHY_STATE_TRANSMIT;
+  
+  //last status read to clear all interrupts now
   __inline_rfm12_phy_getStatus();
 
+  //enable interrupt
   funcptr.enableINT();
   
+  //start
   __inline_rfm12_phy_startTX();
   return true;
 }
 
 void rfm12_phy_modeRX()
 {
+  //disable interrupt
   funcptr.disableINT();
+  
   __inline_rfm12_phy_disableRXTX();
   phystate = RFM12_PHY_STATE_IDLE;
   
@@ -187,6 +194,8 @@ void rfm12_phy_setTxConf(bool mp, RFM12_PHY_FREQDEVIATION_t deviation, RFM12_PHY
 void rfm12_phy_int_vect()
 {
   uint16_t status = __inline_rfm12_phy_getStatus(); 
+  uint8_t data;
+  
   //check if an FIFO interrupt occure
   if((status & RFM12_STATUSRD_RGIT_FFIT))
   {
@@ -198,16 +207,21 @@ void rfm12_phy_int_vect()
       
       case RFM12_PHY_STATE_RECEIVE:
 
+	data = __inline_rfm12_phy_getFIFOByte();
+	//usart_putc_nonblock(data);
 	if (status & RFM12_STATUSRD_RGUR_FFOV)
 	{
 	  //Buffer overflow Error - STOP
 	  rfm12_mac_previousLayerReceiveCallback(0, RFM12_TRANSFER_STATUS_BUF_OVF);
 	  
+	  //restart RX mode
 	  rfm12_phy_modeRX();
+	  
+	  //reset this statemachine
 	  phystate = RFM12_PHY_STATE_IDLE;
 	}
 	
-	else if(!rfm12_mac_previousLayerReceiveCallback(__inline_rfm12_phy_getFIFOByte(), RFM12_TRANSFER_STATUS_CONTINUE))
+	else if(!rfm12_mac_previousLayerReceiveCallback(data, RFM12_TRANSFER_STATUS_CONTINUE))
 	{
 	  //if the next layer returns a false do the following:
 	  rfm12_phy_modeRX();

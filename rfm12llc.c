@@ -37,17 +37,13 @@ RFM12_LLC_TX_State_t volatile txllcstate;
 RFM12_LLC_Header_t volatile rxheader;
 RFM12_LLC_Header_t volatile txheader;
 
-RFM12_LLC_t llcconfig;
-
 //interface to next layer
 uint8_t (*rfm12_llc_nextLayerTransmitCallback)(void);
 bool (*rfm12_llc_nextLayerReceiveCallback[LLC_SERVICE_COUNT])(uint8_t data, RFM12_Transfer_Status_t status);
 
 //init
-void rfm12_llc_init(uint8_t (*prfm12_llc_nextLayerTransmitCallback)(void), uint16_t pownAddr )
+void rfm12_llc_init(uint8_t (*prfm12_llc_nextLayerTransmitCallback)(void))
 {
-  llcconfig.ownAddr = pownAddr;
-  llcconfig.grps = 0;
   rxllcstate = RFM12_LLC_RX_STATE_IDLE;
   
   for(uint16_t i = 0; i< LLC_SERVICE_COUNT; i++)
@@ -58,72 +54,38 @@ void rfm12_llc_init(uint8_t (*prfm12_llc_nextLayerTransmitCallback)(void), uint1
   rfm12_llc_nextLayerTransmitCallback = prfm12_llc_nextLayerTransmitCallback;
 }
 
-//its possible to change the addr with this
-void rfm12_llc_setAddr(uint16_t addr)
-{
-  llcconfig.ownAddr = addr;
-}
-
 bool rfm12_llc_startTX(uint16_t dst, uint8_t service, uint16_t length)
 {
-  txheader.dstAddr = dst;
-  txheader.srcAddr = llcconfig.ownAddr;
-  txheader.length = length;
   txheader.service = service;
-  txllcstate = RFM12_LLC_TX_STATE_DST_HIGH;
+  txheader.length = length;
+  txllcstate = RFM12_LLC_TX_STATE_SERVICE;
   
-  return rfm12_mac_startTransmission(txheader.length+5);
+  return rfm12_mac_startTransmission(dst, length+1);
 }
 
 bool rfm12_llc_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_t status)
 {
+  static uint8_t srcAddr[2];
   switch(rxllcstate)
   {
     case RFM12_LLC_RX_STATE_IDLE:
-      rxllcstate = RFM12_LLC_RX_STATE_DST_HIGH;
-      
-    case RFM12_LLC_RX_STATE_DST_HIGH:
-      rxheader.dstAddr = (data<<8);
-      rxllcstate = RFM12_LLC_RX_STATE_DST_LOW;
-      break;
-      
-    case RFM12_LLC_RX_STATE_DST_LOW:
-      rxheader.dstAddr |= data;
       rxllcstate = RFM12_LLC_RX_STATE_SRC_HIGH;
       
-      if(rxheader.dstAddr & RFM12_LLC_GROUP_SIGN)
-      {
-	//check if we are in any group
-	if(!(rxheader.dstAddr & llcconfig.grps))
-	{
-	  goto reset;
-	}
-      }
-      
-      else
-      {
-	//only check address
-	if(rxheader.dstAddr != llcconfig.ownAddr && rxheader.dstAddr != LLC_BROADCAST_ADDR)
-	{
-	  goto reset;
-	}
-      }
-      break;
       
     case RFM12_LLC_RX_STATE_SRC_HIGH:
-      rxheader.srcAddr = (data<<8);
       rxllcstate = RFM12_LLC_RX_STATE_SRC_LOW;
+      srcAddr[0] = data;
       break;
       
     case RFM12_LLC_RX_STATE_SRC_LOW:
-      rxheader.srcAddr |= data;
       rxllcstate = RFM12_LLC_RX_STATE_SERVICE;
+      srcAddr[1] = data;
       break;
-        
+    
     case RFM12_LLC_RX_STATE_SERVICE:
       rxllcstate = RFM12_LLC_RX_STATE_PUT_SRC_ADDR;
       rxheader.service = data;
-      if(!rfm12_llc_nextLayerReceiveCallback[rxheader.service])
+      if(!rfm12_llc_nextLayerReceiveCallback[0])
       {
 	goto reset;
       }
@@ -131,18 +93,16 @@ bool rfm12_llc_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_
       
     case RFM12_LLC_RX_STATE_PUT_SRC_ADDR:
       rxllcstate = RFM12_LLC_RX_STATE_RX;
-      if(!rfm12_llc_nextLayerReceiveCallback[rxheader.service](rxheader.srcAddr>>8, status) || !rfm12_llc_nextLayerReceiveCallback[rxheader.service](rxheader.srcAddr&0xFF, status))
+      if(!rfm12_llc_nextLayerReceiveCallback[0](srcAddr[0], status) || !rfm12_llc_nextLayerReceiveCallback[0](srcAddr[1], status))
       {
-	usart_putc('E');
 	goto reset;
       }
       
     case RFM12_LLC_RX_STATE_RX:
       if(status != RFM12_TRANSFER_STATUS_LASTBYTE)
       {
-	if(!rfm12_llc_nextLayerReceiveCallback[rxheader.service](data, status))
+	if(!rfm12_llc_nextLayerReceiveCallback[0](data, status))
 	{
-	  usart_putc('F');
 	  goto reset;
 	}
       }
@@ -150,7 +110,7 @@ bool rfm12_llc_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_
       else
       {
 	//this was the last byte - clean up
-	rfm12_llc_nextLayerReceiveCallback[rxheader.service](data, status);
+	rfm12_llc_nextLayerReceiveCallback[0](data, status);
 	goto reset;
       }
       break;
@@ -172,27 +132,7 @@ uint8_t rfm12_llc_previousLayerTransmitCallback()
 {
   uint8_t temp = 0;
   switch(txllcstate)
-  {
-    case RFM12_LLC_TX_STATE_DST_HIGH:
-      txllcstate = RFM12_LLC_TX_STATE_DST_LOW;
-      temp = (txheader.dstAddr>>8)&0xFF;
-      break;
-      
-    case RFM12_LLC_TX_STATE_DST_LOW:
-      txllcstate = RFM12_LLC_TX_STATE_SRC_HIGH;
-      temp = txheader.dstAddr&0xFF;
-      break;
-      
-    case RFM12_LLC_TX_STATE_SRC_HIGH:
-      txllcstate = RFM12_LLC_TX_STATE_SRC_LOW;
-      temp = (txheader.srcAddr>>8)&0xFF;
-      break;
-      
-    case RFM12_LLC_TX_STATE_SRC_LOW:
-      txllcstate = RFM12_LLC_TX_STATE_SERVICE;
-      temp = txheader.srcAddr&0xFF;
-      break;
-      
+  {   
     case RFM12_LLC_TX_STATE_SERVICE:
       txllcstate = RFM12_LLC_TX_STATE_TX;
       temp = txheader.service;

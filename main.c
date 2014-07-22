@@ -34,7 +34,7 @@
 #include <stdio.h>
 
 char txbuf[] = "Hallo";
-char rxbuf[10];
+char rxbuf[20];
 
 char *prxbuf = rxbuf;
 char *prxcompare = txbuf;
@@ -51,19 +51,7 @@ void delay_ms(uint16_t ms)
 
 void switchled(void)
 {
-  static bool volatile led = false;
-  if(led)
-  {
-    //PORTD = (1<<PD6);
-    PORTD &= ~(1<<PD5);
-    led = false;
-  }
-  else
-  {
-    PORTD |= (1<<PD5);
-    //PORTD &= ~(1<<PD6);
-    led = true;
-  }
+  PORTD ^= (1<<PD5);
 }
 
 void enablerfm12(void)
@@ -92,18 +80,13 @@ void (*rfm12_int_vect)(void) = NULL;
 bool receive(uint8_t data, RFM12_Transfer_Status_t status)
 {
   bool datatest = true;
-  
-  if(status == RFM12_TRANSFER_STATUS_LOST_SIGNAL)
-  {
-    goto reset;
-  }
-  
+  usart_putc_nonblock(data);
   if(status == RFM12_TRANSFER_STATUS_LASTBYTE)
   { 
     //switchled();
     prxbuf = rxbuf;
-    prxbuf++;
-    prxbuf++;
+    prxbuf += 2;
+    
     while(*prxcompare)
     {
       if(*prxcompare != *prxbuf)
@@ -198,7 +181,7 @@ int main(void)
   
   delay_ms(500);
   PORTD |= (1<<PD6);
-  
+  usart_puts_nonblock("Init!");
   while(1)
   {
     delay_ms(500);

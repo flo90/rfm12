@@ -29,10 +29,16 @@
 #include <avr/io.h>
 #include "usart.h"
 
+#define MAC_BROADCAST_ADDR 0x7FFF
+
 const uint8_t _rfm12_mac_sync[] = {0x2D, 0xD4};
 
 RFM12_MAC_RX_State_t volatile rxmacstate;
 RFM12_MAC_TX_State_t volatile txmacstate;
+RFM12_MAC_Header_t rxheader;
+RFM12_MAC_Header_t txheader;
+RFM12_MAC_t macconfig;
+
 volatile uint16_t rxlength;
 volatile uint16_t txlength;
 
@@ -52,11 +58,21 @@ void rfm12_mac_setChannel(uint8_t chan, RFM12_PHY_VDI_t vdi, RFM12_PHY_LNAGAIN_t
   rfm12_phy_setFrequency(channel[chan].frequency);
 }
 
-bool rfm12_mac_startTransmission(uint16_t plength)
+void rfm12_mac_setAddr(uint16_t addr)
+{
+  macconfig.ownAddr = addr;
+}
+
+void rfm12_mac_setGroup(uint16_t grps)
+{
+  macconfig.grps = grps & ~RFM12_MAC_GROUP_SIGN;
+}
+
+bool rfm12_mac_startTransmission(uint16_t pdst, uint16_t plength)
 {
   txlength = plength;
+  txheader.dstAddr = pdst;
   txmacstate = RFM12_MAC_TX_STATE_PREAMBLE;
-  
   return rfm12_phy_modeTX();
 }
 
@@ -64,37 +80,82 @@ bool rfm12_mac_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_
 { 
   //just a cheap checksum to ensure that the length is not corrupted 
   static uint8_t checksum = 0;
-
+  
   switch(rxmacstate)
   {
     case RFM12_MAC_RX_STATE_IDLE:
       rxmacstate = RFM12_MAC_RX_STATE_LENGTH_HIGH;
-      
+    
     case RFM12_MAC_RX_STATE_LENGTH_HIGH:
+      rxmacstate = RFM12_MAC_RX_STATE_LENGTH_LOW;
       rxlength = (data<<8);
       checksum = data;
-      rxmacstate = RFM12_MAC_RX_STATE_LENGTH_LOW;
       break;
 
     case RFM12_MAC_RX_STATE_LENGTH_LOW:
+      rxmacstate = RFM12_MAC_RX_STATE_DST_HIGH;
       rxlength |= data&0xFF;
       
       if(rxlength > RFM12_MAX_FRAME_SIZE)
       {
 	goto reset;
       }
-      
       checksum += data;
-      rxmacstate = RFM12_MAC_RX_STATE_CHECKSUM;
       break;
 	  
-    case RFM12_MAC_RX_STATE_CHECKSUM:
-      if(checksum == data)
+    case RFM12_MAC_RX_STATE_DST_HIGH:
+      rxmacstate = RFM12_MAC_RX_STATE_DST_LOW;
+      rxheader.dstAddr = (data<<8);
+      checksum += data;
+      break;
+      
+    case RFM12_MAC_RX_STATE_DST_LOW:
+      rxmacstate = RFM12_MAC_RX_STATE_SRC_HIGH;
+      rxheader.dstAddr |= data&0xFF;
+      checksum += data;
+      
+      if(rxheader.dstAddr & RFM12_MAC_GROUP_SIGN)
       {
-	rxmacstate = RFM12_MAC_RX_STATE_RX;
+	//check if we are in any group
+	if(!(rxheader.dstAddr & macconfig.grps))
+	{
+	  goto reset;
+	}
       }
       
       else
+      {
+	//only check address
+	if((rxheader.dstAddr != macconfig.ownAddr) && (rxheader.dstAddr != MAC_BROADCAST_ADDR))
+	{
+	  goto reset;
+	}
+      }
+      break;
+      
+    case RFM12_MAC_RX_STATE_SRC_HIGH:
+      rxmacstate = RFM12_MAC_RX_STATE_SRC_LOW;
+      rxheader.srcAddr = (data<<8);
+      checksum += data;
+      break;
+      
+    case RFM12_MAC_RX_STATE_SRC_LOW:
+      rxmacstate = RFM12_MAC_RX_STATE_CHECKSUM;
+      rxheader.srcAddr |= data&0xFF;
+      checksum += data;
+      break;
+      
+    case RFM12_MAC_RX_STATE_CHECKSUM:
+      rxmacstate = RFM12_MAC_RX_STATE_PUT_SRC_ADDR;
+      if(checksum != data)
+      {
+	goto reset;
+      }
+      
+     
+    case RFM12_MAC_RX_STATE_PUT_SRC_ADDR:
+      rxmacstate = RFM12_MAC_RX_STATE_RX;
+      if(!rfm12_llc_previousLayerReceiveCallback(rxheader.srcAddr>>8, status) || !rfm12_llc_previousLayerReceiveCallback(rxheader.srcAddr&0xFF, status))
       {
 	goto reset;
       }
@@ -140,39 +201,61 @@ uint8_t rfm12_mac_previousLayerTransmitCallback(void)
   switch(txmacstate)
   {
     case RFM12_MAC_TX_STATE_PREAMBLE:
-      
       txmacstate = RFM12_MAC_TX_STATE_SYNC0;
       temp = 0xAA;
       break;
     
     case RFM12_MAC_TX_STATE_SYNC0:
-      
       txmacstate = RFM12_MAC_TX_STATE_SYNC1;
       temp = _rfm12_mac_sync[0];
       break;
       
     case RFM12_MAC_TX_STATE_SYNC1:
-      
       txmacstate = RFM12_MAC_TX_STATE_LENGTH_HIGH;
       temp = _rfm12_mac_sync[1];
       break;
       
-    case RFM12_MAC_TX_STATE_LENGTH_HIGH:
       
+    case RFM12_MAC_TX_STATE_LENGTH_HIGH:
       txmacstate = RFM12_MAC_TX_STATE_LENGTH_LOW;
       temp = (txlength>>8)&0xFF;
       break;
       
     case RFM12_MAC_TX_STATE_LENGTH_LOW:
-      
-      txmacstate = RFM12_MAC_TX_STATE_CHECKSUM;
+      txmacstate = RFM12_MAC_TX_STATE_DST_HIGH;
       temp = txlength&0xFF;
+      break;
+      
+    case RFM12_MAC_TX_STATE_DST_HIGH:
+      txmacstate = RFM12_MAC_TX_STATE_DST_LOW;
+      temp = (txheader.dstAddr>>8)&0xFF;
+      break;
+      
+    case RFM12_MAC_TX_STATE_DST_LOW:
+      txmacstate = RFM12_MAC_TX_STATE_SRC_HIGH;
+      temp = txheader.dstAddr&0xFF;
+      break;
+      
+    case RFM12_MAC_TX_STATE_SRC_HIGH:
+      txmacstate = RFM12_MAC_TX_STATE_SRC_LOW;
+      temp = (macconfig.ownAddr>>8)&0xFF;
+      break;
+      
+    case RFM12_MAC_TX_STATE_SRC_LOW:
+      txmacstate = RFM12_MAC_TX_STATE_CHECKSUM;
+      temp = macconfig.ownAddr&0xFF;
       break;
       
     case RFM12_MAC_TX_STATE_CHECKSUM:
       txmacstate = RFM12_MAC_TX_STATE_TX;
       temp = (txlength>>8)&0xFF;
       temp += txlength&0xFF;
+      
+      temp += (txheader.dstAddr>>8)&0xFF;
+      temp += txheader.dstAddr&0xFF;
+      
+      temp += (macconfig.ownAddr>>8)&0xFF;
+      temp += macconfig.ownAddr&0xFF;
       break;
       
     case RFM12_MAC_TX_STATE_TX:
@@ -192,6 +275,7 @@ uint8_t rfm12_mac_previousLayerTransmitCallback(void)
       break;
       
     case RFM12_MAC_TX_STATE_END:
+      //set to receive mode
       rfm12_phy_modeRX();
       temp = 0xAA;
       break;

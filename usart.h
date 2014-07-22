@@ -25,7 +25,7 @@ void usart_init(void);
 
 void usart_putc( char c );
 
-void usart_putc_nonblock( char c );
+bool usart_putc_nonblock( char c );
 
 bool usart_puts_nonblock(char *data);
 

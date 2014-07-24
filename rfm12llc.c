@@ -85,7 +85,7 @@ bool rfm12_llc_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_
     case RFM12_LLC_RX_STATE_SERVICE:
       rxllcstate = RFM12_LLC_RX_STATE_PUT_SRC_ADDR;
       rxheader.service = data;
-      if(!rfm12_llc_nextLayerReceiveCallback[0])
+      if(!rfm12_llc_nextLayerReceiveCallback[0] || (rxheader.service >= LLC_SERVICE_COUNT))
       {
 	goto reset;
       }
@@ -93,7 +93,7 @@ bool rfm12_llc_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_
       
     case RFM12_LLC_RX_STATE_PUT_SRC_ADDR:
       rxllcstate = RFM12_LLC_RX_STATE_RX;
-      if(!rfm12_llc_nextLayerReceiveCallback[0](srcAddr[0], status) || !rfm12_llc_nextLayerReceiveCallback[0](srcAddr[1], status))
+      if(!rfm12_llc_nextLayerReceiveCallback[rxheader.service](srcAddr[0], status) || !rfm12_llc_nextLayerReceiveCallback[rxheader.service](srcAddr[1], status))
       {
 	goto reset;
       }
@@ -101,7 +101,7 @@ bool rfm12_llc_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_
     case RFM12_LLC_RX_STATE_RX:
       if(status != RFM12_TRANSFER_STATUS_LASTBYTE)
       {
-	if(!rfm12_llc_nextLayerReceiveCallback[0](data, status))
+	if(!rfm12_llc_nextLayerReceiveCallback[rxheader.service](data, status))
 	{
 	  goto reset;
 	}
@@ -110,7 +110,7 @@ bool rfm12_llc_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_
       else
       {
 	//this was the last byte - clean up
-	rfm12_llc_nextLayerReceiveCallback[0](data, status);
+	rfm12_llc_nextLayerReceiveCallback[rxheader.service](data, status);
 	goto reset;
       }
       break;

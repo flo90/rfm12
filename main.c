@@ -182,7 +182,7 @@ int main(void)
   delay_ms(500);
   PORTD |= (1<<PD6);
   usart_puts_nonblock("Init!");
-  while(1)
+  while(0)
   {
     delay_ms(500);
     ptxbuf = txbuf;

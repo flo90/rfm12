@@ -10,6 +10,8 @@
 #include "rfm12.h"
 
 #define RFM12_MAC_GROUP_SIGN (1<<15)
+#define RFM12_MAC_USEBUFFER
+#define RFM12_MAC_MAXFRAMES 10
 
 typedef enum RFM12_MAC_RX_State
 {
@@ -51,9 +53,9 @@ typedef struct RFM12_MAC_Channel
 
 typedef struct RFM12_MAC_Header
 {
-  uint16_t length;
   uint16_t dstAddr;
   uint16_t srcAddr;
+  uint16_t length;
 }RFM12_MAC_Header_t;
 
 typedef struct RFM12_MAC

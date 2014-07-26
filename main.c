@@ -21,7 +21,7 @@
 #include "usart.h"
 #include "rfm12.h"
 #include "rfm12llc.h"
-
+#include "rfm12macbuf.h"
 
 #include "rfm12phy.h"
 
@@ -80,7 +80,7 @@ void (*rfm12_int_vect)(void) = NULL;
 bool receive(uint8_t data, RFM12_Transfer_Status_t status)
 {
   bool datatest = true;
-  usart_putc_nonblock(data);
+  //usart_putc_nonblock(data);
   if(status == RFM12_TRANSFER_STATUS_LASTBYTE)
   { 
     //switchled();
@@ -127,7 +127,7 @@ uint8_t transmit(void)
 }
 
 RFM12_PHY_FUNCPTR_t rfm12funcptr;
-
+RFM12_MAC_Frame_t *pframe;
 int main(void)
 {
   //init ports
@@ -184,12 +184,23 @@ int main(void)
   usart_puts_nonblock("Init!");
   while(0)
   {
+    
+#if 1
+    if((pframe = rfm12_mac_buf_nextPkt()) != NULL)
+    {
+      while(pframe->header.length--)
+      {
+	usart_putc_nonblock(*(pframe->data++));
+      }
+    }
+#else
     delay_ms(500);
     ptxbuf = txbuf;
     if(rfm12_llc_startTX(1, 0, sizeof(txbuf)))
     {
       usart_puts_nonblock("TX Data");
     }
+#endif
   }
   
   while(1);

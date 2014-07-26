@@ -2,6 +2,7 @@
 #define _RFM12MACBUF_H_
 
 #include "rfm12mac.h"
+#include <stdbool.h>
 
 #define RFM12MACBUFSIZE 1024
 #define MAXFRAMES 20
@@ -10,6 +11,7 @@ typedef struct RFM12_MAC_Frame
 {
   RFM12_MAC_Header_t header;
   uint8_t *data;
+  bool finished;
 }RFM12_MAC_Frame_t;
 
 

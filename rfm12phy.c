@@ -213,7 +213,7 @@ void rfm12_phy_int_vect()
 	{
 	  //Buffer overflow Error - STOP
 	  rfm12_mac_previousLayerReceiveCallback(0, RFM12_TRANSFER_STATUS_BUF_OVF);
-	  
+	  usart_putc_nonblock('B');
 	  //restart RX mode
 	  rfm12_phy_modeRX();
 	  

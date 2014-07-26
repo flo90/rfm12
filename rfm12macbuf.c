@@ -15,6 +15,7 @@ void rfm12_mac_buf_init()
   //Current frame at the beginning
   pCurrentFrame = frames;
   pLeastFrame = frames;
+  pNextFrame = frames;
   
   for(i=0; i < MAXFRAMES; i++)
   {
@@ -26,8 +27,15 @@ void rfm12_mac_buf_init()
 RFM12_MAC_Frame_t *rfm12_mac_buf_reqSpace(uint16_t size)
 {
   RFM12_MAC_Frame_t *pframe;
+  
+  //check if the next Frame is free
+  if(pCurrentFrame->data != NULL)
+  {
+    return NULL;
+  }
+  
   //check free size of buffer
-  if((pCurrentByte + size) <= (buffer + RFM12MACBUFSIZE))
+  if((pCurrentByte + size) < (buffer + RFM12MACBUFSIZE))
   {
     pCurrentFrame->data = pCurrentByte;
     pCurrentByte += size;
@@ -45,7 +53,10 @@ RFM12_MAC_Frame_t *rfm12_mac_buf_reqSpace(uint16_t size)
     pCurrentByte = buffer + size;
     pframe = pCurrentFrame;
     ++pCurrentFrame;
-    
+    if(pCurrentFrame > (frames + MAXFRAMES))
+    {
+      pCurrentFrame = frames;
+    }
   }
   else
   {

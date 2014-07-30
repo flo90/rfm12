@@ -33,9 +33,10 @@
 
 #include <stdio.h>
 
-char txbuf[] = "Hallo";
+//char txbuf[] = "Hallo";
+char txbuf[] = {'H', 'a', 'l', 'l', 'o'};
 char rxbuf[20];
-
+char string[30];
 char *prxbuf = rxbuf;
 char *prxcompare = txbuf;
 char volatile *ptxbuf = txbuf;
@@ -130,6 +131,8 @@ RFM12_PHY_FUNCPTR_t rfm12funcptr;
 RFM12_MAC_Frame_t *pframe;
 int main(void)
 {
+  static uint8_t *pdata;
+  uint16_t i;
   //init ports
   DDRD |= (1<<PD6) | (1<<PD5);
   PORTD |= (1<<PD2);
@@ -182,17 +185,27 @@ int main(void)
   delay_ms(500);
   PORTD |= (1<<PD6);
   usart_puts_nonblock("Init!");
-  while(0)
+   
+  while(1)
   {
-    
-#if 1
+    delay_ms(100);
+#if 0
     if((pframe = rfm12_mac_buf_nextPkt()) != NULL)
     {
-      while(pframe->header.length--)
-      {
-	usart_putc_nonblock(*(pframe->data++));
-      }
+      pdata = (uint8_t *) pframe->data;
+      /*
+      snprintf(string, sizeof(string), "Size: %u", sizeof(txbuf));
+      usart_puts_nonblock(string);
+      */
+     
+     for(i = 0; i < (pframe->header.length); i++)
+     {
+       usart_putc_nonblock(*(pdata+i));
+     }
+     
+      rfm12_mac_buf_clearFrame();
     }
+    
 #else
     delay_ms(500);
     ptxbuf = txbuf;

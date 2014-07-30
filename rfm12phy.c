@@ -194,7 +194,6 @@ void rfm12_phy_setTxConf(bool mp, RFM12_PHY_FREQDEVIATION_t deviation, RFM12_PHY
 void rfm12_phy_int_vect()
 {
   uint16_t status = __inline_rfm12_phy_getStatus(); 
-  uint8_t data;
   
   //check if an FIFO interrupt occure
   if((status & RFM12_STATUSRD_RGIT_FFIT))
@@ -207,13 +206,11 @@ void rfm12_phy_int_vect()
       
       case RFM12_PHY_STATE_RECEIVE:
 
-	data = __inline_rfm12_phy_getFIFOByte();
-	//usart_putc_nonblock(data);
 	if (status & RFM12_STATUSRD_RGUR_FFOV)
 	{
+	  usart_puts_nonblock("Buf OVF");
 	  //Buffer overflow Error - STOP
 	  rfm12_mac_previousLayerReceiveCallback(0, RFM12_TRANSFER_STATUS_BUF_OVF);
-	  usart_putc_nonblock('B');
 	  //restart RX mode
 	  rfm12_phy_modeRX();
 	  
@@ -221,7 +218,7 @@ void rfm12_phy_int_vect()
 	  phystate = RFM12_PHY_STATE_IDLE;
 	}
 	
-	else if(!rfm12_mac_previousLayerReceiveCallback(data, RFM12_TRANSFER_STATUS_CONTINUE))
+	else if(!rfm12_mac_previousLayerReceiveCallback(__inline_rfm12_phy_getFIFOByte(), RFM12_TRANSFER_STATUS_CONTINUE))
 	{
 	  //if the next layer returns a false do the following:
 	  rfm12_phy_modeRX();

@@ -11,6 +11,8 @@
 
 #define RFM12_MAC_GROUP_SIGN (1<<15)
 #define RFM12_MAC_USEBUFFER
+#define RFM12_USELLC
+
 #define RFM12_MAC_MAXFRAMES 10
 
 typedef enum RFM12_MAC_RX_State
@@ -64,6 +66,13 @@ typedef struct RFM12_MAC
   uint16_t grps;
 }RFM12_MAC_t;
 
+typedef struct RFM12_MAC_TX_FRAME
+{
+  uint16_t dstAddr;
+  uint16_t length;
+  uint8_t *data;
+}RFM12_MAC_TX_FRAME_t;
+
 bool rfm12_mac_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_t status);
 uint8_t rfm12_mac_previousLayerTransmitCallback(void);
 
@@ -77,8 +86,11 @@ void rfm12_mac_setGroup(uint16_t grps);
 
 bool rfm12_mac_mediaBusy(void);
 
+#ifdef RFM12_MAC_USEBUFFER
+bool rfm12_mac_startTransmission(RFM12_MAC_TX_FRAME_t *pframe);
+#else
 bool rfm12_mac_startTransmission(uint16_t pdst, uint16_t length);
-
+#endif
 void rfm12_mac_stopTransmission(void);
 
 #endif

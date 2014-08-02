@@ -1,7 +1,7 @@
 #include "rfm12macbuf.h"
 
 #include "usart.h"
-static volatile uint8_t buffer[RFM12MACBUFSIZE];
+static volatile uint8_t rxbuffer[RFM12MACBUFSIZE];
 static RFM12_MAC_Frame_t frames[MAXFRAMES];
 static volatile uint8_t volatile *pCurrentByte;
 
@@ -13,7 +13,7 @@ void rfm12_mac_buf_init()
   uint8_t i;
   
   //Currentbyte at the beginning of the buffer
-  pCurrentByte = buffer;
+  pCurrentByte = rxbuffer;
   
   //Current frame at the beginning
   pCurrentFrame = frames;
@@ -40,7 +40,7 @@ RFM12_MAC_Frame_t volatile *rfm12_mac_buf_reqSpace(uint16_t size)
   }
   
   //check free size of buffer
-  if((pCurrentByte + size) <= (buffer + RFM12MACBUFSIZE))
+  if((pCurrentByte + size) <= (rxbuffer + RFM12MACBUFSIZE))
   {
     pCurrentFrame->data = pCurrentByte;
     pCurrentByte += size;
@@ -53,10 +53,10 @@ RFM12_MAC_Frame_t volatile *rfm12_mac_buf_reqSpace(uint16_t size)
     }
   }
   //try to find space from the beginning
-  else if ((pNextFrame->data == NULL) || ((buffer + size) < pNextFrame->data))
+  else if ((pNextFrame->data == NULL) || ((rxbuffer + size) < pNextFrame->data))
   {
-    pCurrentFrame->data = buffer;
-    pCurrentByte = buffer + size;
+    pCurrentFrame->data = rxbuffer;
+    pCurrentByte = rxbuffer + size;
     pframe = pCurrentFrame;
     
     ++pCurrentFrame;

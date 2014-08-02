@@ -21,14 +21,15 @@
 #include <stdbool.h>
 
 #include "rfm12mac.h"
+#include "rfm12macbuf.h"
 
 #include <avr/io.h>
 
 //---TEST---
 #include "usart.h"
 
-#define LLC_BROADCAST_ADDR 0x7FFF
 #define LLC_SERVICE_COUNT 10
+#define LLC_BUFFER_SIZE 32
 
 //state machine
 RFM12_LLC_RX_State_t volatile rxllcstate;
@@ -37,16 +38,24 @@ RFM12_LLC_TX_State_t volatile txllcstate;
 RFM12_LLC_Header_t volatile rxheader;
 RFM12_LLC_Header_t volatile txheader;
 
+#ifdef RFM12_MAC_USEBUFFER
+static uint8_t llctxbuffer[LLC_BUFFER_SIZE];
+static RFM12_MAC_TX_FRAME_t txframe;
+#endif
+
 //interface to next layer
 uint8_t (*rfm12_llc_nextLayerTransmitCallback)(void);
+#ifdef RFM12_MAC_USEBUFFER
+void (*rfm12_llc_nextLayerReceiveCallback[LLC_SERVICE_COUNT])(RFM12_MAC_Frame_t *pframe);
+#else
 bool (*rfm12_llc_nextLayerReceiveCallback[LLC_SERVICE_COUNT])(uint8_t data, RFM12_Transfer_Status_t status);
-
+#endif
 //init
 void rfm12_llc_init(uint8_t (*prfm12_llc_nextLayerTransmitCallback)(void))
 {
   rxllcstate = RFM12_LLC_RX_STATE_IDLE;
   
-  for(uint16_t i = 0; i< LLC_SERVICE_COUNT; i++)
+  for(uint8_t i = 0; i < LLC_SERVICE_COUNT; i++)
   {
     rfm12_llc_nextLayerReceiveCallback[i] = NULL;
   }
@@ -54,6 +63,42 @@ void rfm12_llc_init(uint8_t (*prfm12_llc_nextLayerTransmitCallback)(void))
   rfm12_llc_nextLayerTransmitCallback = prfm12_llc_nextLayerTransmitCallback;
 }
 
+#ifdef RFM12_MAC_USEBUFFER
+void rfm12_llc_taskHandler()
+{
+  RFM12_MAC_Frame_t *pframe;
+  uint8_t service;
+  if((pframe = rfm12_mac_buf_nextPkt()) != NULL)
+  {
+    service = *pframe->data++;
+    if(rfm12_llc_nextLayerReceiveCallback[service] != NULL)
+    {
+      rfm12_llc_nextLayerReceiveCallback[service](pframe);
+    }
+  }
+}
+
+uint8_t *rfm12_llc_getSpace(uint16_t size)
+{
+  if((size + 1) > LLC_BUFFER_SIZE)
+  {
+    return NULL;
+  }
+  txframe.length = size;
+  txframe.data = llctxbuffer+1;
+  return llctxbuffer+1;
+}
+
+bool rfm12_llc_startTX(uint16_t dstAddr, uint8_t service)
+{
+  *llctxbuffer = service;
+  txframe.dstAddr = dstAddr;
+  return rfm12_mac_startTransmission(&txframe);
+}
+
+#endif
+
+#ifndef RFM12_MAC_USEBUFFER
 bool rfm12_llc_startTX(uint16_t dst, uint8_t service, uint16_t length)
 {
   txheader.service = service;
@@ -62,7 +107,9 @@ bool rfm12_llc_startTX(uint16_t dst, uint8_t service, uint16_t length)
   
   return rfm12_mac_startTransmission(dst, length+1);
 }
+#endif
 
+#ifndef RFM12_MAC_USEBUFFER
 bool rfm12_llc_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_t status)
 {
   static uint8_t srcAddr[2];
@@ -127,6 +174,7 @@ bool rfm12_llc_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_
   rxllcstate = RFM12_LLC_RX_STATE_IDLE;
   return false;
 }
+#endif
 
 uint8_t rfm12_llc_previousLayerTransmitCallback()
 {
@@ -144,8 +192,14 @@ uint8_t rfm12_llc_previousLayerTransmitCallback()
   }
   return temp;
 }
-
+#ifdef RFM12_MAC_USEBUFFER
+void rfm12_llc_registerProto(uint8_t slot, void (*prfm12_llc_nextLayerReceiveCallback)(RFM12_MAC_Frame_t *pframe))
+{
+  rfm12_llc_nextLayerReceiveCallback[slot] = prfm12_llc_nextLayerReceiveCallback;
+}
+#else
 void rfm12_llc_registerProto(uint8_t slot, bool (*prfm12_llc_nextLayerReceiveCallback)(uint8_t data, RFM12_Transfer_Status_t status))
 {
   rfm12_llc_nextLayerReceiveCallback[slot] = prfm12_llc_nextLayerReceiveCallback;
 }
+#endif

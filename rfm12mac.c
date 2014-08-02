@@ -40,8 +40,12 @@ RFM12_MAC_TX_State_t volatile txmacstate;
 RFM12_MAC_Header_t txheader;
 RFM12_MAC_t macconfig;
 
-volatile uint16_t txlength;
+#ifdef RFM12_MAC_USEBUFFER
+static RFM12_MAC_TX_FRAME_t *ptxframe = NULL;
+#endif
 
+volatile uint16_t txlength;
+volatile uint8_t *txdata;
 bool (*rfm12_mac_nextLayerReceiveCallback)(uint8_t data) = NULL;
 
 void rfm12_mac_init()
@@ -70,7 +74,16 @@ void rfm12_mac_setGroup(uint16_t grps)
 {
   macconfig.grps = grps & ~RFM12_MAC_GROUP_SIGN;
 }
-
+#ifdef RFM12_MAC_USEBUFFER
+bool rfm12_mac_startTransmission(RFM12_MAC_TX_FRAME_t *pframe)
+{
+  ptxframe = pframe;
+  txlength = ptxframe->length;
+  txdata = ptxframe->data;
+  txmacstate = RFM12_MAC_TX_STATE_PREAMBLE;
+  return rfm12_phy_modeTX();
+}
+#else
 bool rfm12_mac_startTransmission(uint16_t pdst, uint16_t plength)
 {
   txlength = plength;
@@ -78,6 +91,7 @@ bool rfm12_mac_startTransmission(uint16_t pdst, uint16_t plength)
   txmacstate = RFM12_MAC_TX_STATE_PREAMBLE;
   return rfm12_phy_modeTX();
 }
+#endif
 
 bool rfm12_mac_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_t status)
 { 
@@ -183,12 +197,14 @@ bool rfm12_mac_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_
     case RFM12_MAC_RX_STATE_RX:
       //usart_putc_nonblock(data);
       //--rxheader.length;
-      
-      if(rxheader.length--)
-      {
 #ifdef RFM12_MAC_USEBUFFER
-	*(pdata++) = data;
-#else
+      *(pdata++) = data;
+#endif    
+     
+      
+      if(0 < --rxheader.length)
+      {
+#ifndef RFM12_MAC_USEBUFFER
 	if(!rfm12_llc_previousLayerReceiveCallback(data, status))
 	{
 	  goto reset;
@@ -199,7 +215,6 @@ bool rfm12_mac_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_
       else
       {
 #ifdef RFM12_MAC_USEBUFFER
-	*(pdata++) = data;
 	pframe->finished = true;
 #else
 	rfm12_llc_previousLayerReceiveCallback(data, RFM12_TRANSFER_STATUS_LASTBYTE);
@@ -247,22 +262,38 @@ uint8_t rfm12_mac_previousLayerTransmitCallback(void)
       
     case RFM12_MAC_TX_STATE_LENGTH_HIGH:
       txmacstate = RFM12_MAC_TX_STATE_LENGTH_LOW;
+#ifdef RFM12_MAC_USEBUFFER
+      temp = ((ptxframe->length)>>8)&0xFF;
+#else
       temp = (txlength>>8)&0xFF;
+#endif
       break;
       
     case RFM12_MAC_TX_STATE_LENGTH_LOW:
       txmacstate = RFM12_MAC_TX_STATE_DST_HIGH;
+#ifdef RFM12_MAC_USEBUFFER
+      temp = (ptxframe->length)&0xFF;
+#else
       temp = txlength&0xFF;
+#endif
       break;
       
     case RFM12_MAC_TX_STATE_DST_HIGH:
       txmacstate = RFM12_MAC_TX_STATE_DST_LOW;
+#ifdef RFM12_MAC_USEBUFFER
+      temp = ((ptxframe->dstAddr)>>8)&0xFF;
+#else
       temp = (txheader.dstAddr>>8)&0xFF;
+#endif
       break;
       
     case RFM12_MAC_TX_STATE_DST_LOW:
       txmacstate = RFM12_MAC_TX_STATE_SRC_HIGH;
+#ifdef RFM12_MAC_USEBUFFER
+      temp = (ptxframe->dstAddr)&0xFF;
+#else
       temp = txheader.dstAddr&0xFF;
+#endif
       break;
       
     case RFM12_MAC_TX_STATE_SRC_HIGH:
@@ -277,24 +308,34 @@ uint8_t rfm12_mac_previousLayerTransmitCallback(void)
       
     case RFM12_MAC_TX_STATE_CHECKSUM:
       txmacstate = RFM12_MAC_TX_STATE_TX;
+#ifdef RFM12_MAC_USEBUFFER
+      temp = ((ptxframe->length)>>8)&0xFF;
+      temp += (ptxframe->length)&0xFF;
+      
+      temp += ((ptxframe->dstAddr)>>8)&0xFF;
+      temp += (ptxframe->dstAddr)&0xFF;
+#else
       temp = (txlength>>8)&0xFF;
       temp += txlength&0xFF;
       
       temp += (txheader.dstAddr>>8)&0xFF;
       temp += txheader.dstAddr&0xFF;
-      
+#endif
       temp += (macconfig.ownAddr>>8)&0xFF;
       temp += macconfig.ownAddr&0xFF;
       
-      txlength++;
+      //txlength++;
       break;
       
     case RFM12_MAC_TX_STATE_TX:
-      --txlength;
       
-      if(txlength)
+      if(0 < txlength--)
       {
+#ifdef RFM12_MAC_USEBUFFER
+	temp = *txdata++;
+#else
 	temp = rfm12_llc_previousLayerTransmitCallback();
+#endif
       }
       
       else
@@ -306,8 +347,13 @@ uint8_t rfm12_mac_previousLayerTransmitCallback(void)
       break;
       
     case RFM12_MAC_TX_STATE_END:
+#ifdef RFM12_MAC_USEBUFFER
+      ptxframe = NULL;
+#endif
       //set to receive mode
       rfm12_phy_modeRX();
+      
+      //again just a dummy byte
       temp = 0xAA;
       break;
   }

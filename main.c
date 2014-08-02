@@ -21,6 +21,7 @@
 #include "usart.h"
 #include "rfm12.h"
 #include "rfm12llc.h"
+#include "rfm12mac.h"
 #include "rfm12macbuf.h"
 
 #include "rfm12phy.h"
@@ -30,17 +31,19 @@
 #include <inttypes.h>
 #include <util/delay.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include <stdio.h>
 
-//char txbuf[] = "Hallo";
-char txbuf[] = {'H', 'a', 'l', 'l', 'o'};
-char rxbuf[20];
-char string[30];
-char *prxbuf = rxbuf;
-char *prxcompare = txbuf;
-char volatile *ptxbuf = txbuf;
+static uint8_t txbuf[] = "Hallo";
+//static uint8_t txbuf[] = {'H', 'a', 'l', 'l', 'o'};
+static uint8_t rxbuf[20];
+static char string[30];
+static uint8_t *prxbuf = rxbuf;
+static uint8_t *prxcompare = txbuf;
+static uint8_t volatile *ptxbuf = txbuf;
 
+static RFM12_MAC_TX_FRAME_t txframe;
 
 void delay_ms(uint16_t ms)
 {
@@ -131,6 +134,10 @@ RFM12_PHY_FUNCPTR_t rfm12funcptr;
 RFM12_MAC_Frame_t *pframe;
 int main(void)
 {
+  txframe.data = txbuf;
+  txframe.dstAddr = 1;
+  txframe.length = sizeof(txbuf);
+  
   static uint8_t *pdata;
   uint16_t i;
   //init ports
@@ -153,8 +160,9 @@ int main(void)
   
   
   rfm12_init( rfm12funcptr, &transmit, 1);
+#ifndef RFM12_MAC_USEBUFFER
   rfm12_llc_registerProto(0, &receive);
-  
+#endif
   //------------------PHY Layer TEST-----------------------
   /*
   rfm12_phy_init(&spi_exchangeword, &enablerfm12, &disablerfm12, &rfm12_int_vect);
@@ -193,10 +201,10 @@ int main(void)
     if((pframe = rfm12_mac_buf_nextPkt()) != NULL)
     {
       pdata = (uint8_t *) pframe->data;
-      /*
-      snprintf(string, sizeof(string), "Size: %u", sizeof(txbuf));
-      usart_puts_nonblock(string);
-      */
+      if(strcmp((char *)txbuf, pframe->data)==0)
+      {
+	switchled();
+      }
      
      for(i = 0; i < (pframe->header.length); i++)
      {
@@ -209,10 +217,17 @@ int main(void)
 #else
     delay_ms(500);
     ptxbuf = txbuf;
+#ifdef RFM12_MAC_USEBUFFER
+    if(rfm12_mac_startTransmission(&txframe))
+    {
+      usart_puts_nonblock("TX Data");
+    }
+#else
     if(rfm12_llc_startTX(1, 0, sizeof(txbuf)))
     {
       usart_puts_nonblock("TX Data");
     }
+#endif
 #endif
   }
   

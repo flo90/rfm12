@@ -1,5 +1,5 @@
 #include "rfm12macbuf.h"
-
+#include "rfm12mac.h"
 #include "usart.h"
 static volatile uint8_t rxbuffer[RFM12MACBUFSIZE];
 static RFM12_MAC_Frame_t frames[MAXFRAMES];

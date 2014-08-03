@@ -26,18 +26,14 @@
 
 #include "rfm12phy.h"
 #include "rfm12mac.h"
-#include "rfm12llc.h"
 
-void rfm12_init(RFM12_PHY_FUNCPTR_t pfuncptr, uint8_t (*prfm12_llc_nextLayerTransmitCallback)(void), uint16_t pownAddr)
+void rfm12_init(RFM12_PHY_FUNCPTR_t pfuncptr, uint16_t pownAddr)
 {
   rfm12_phy_init(pfuncptr);
   
   rfm12_mac_init();
   
   rfm12_mac_setAddr(pownAddr);
-  
-  rfm12_llc_init(prfm12_llc_nextLayerTransmitCallback);
-  
   
   rfm12_phy_setConf( true, true, FREQBAND_433MHz, CAP12_5pf);
   

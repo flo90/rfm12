@@ -195,7 +195,7 @@ typedef enum RFM12_Transfer_Status
   RFM12_TRANSFER_STATUS_BUF_OVF,
 } RFM12_Transfer_Status_t;
 
-void rfm12_init(RFM12_PHY_FUNCPTR_t pfuncptr, uint8_t (*prfm12_llc_nextLayerTransmitCallback)(void), uint16_t pownAddr);
+void rfm12_init(RFM12_PHY_FUNCPTR_t pfuncptr, uint16_t pownAddr);
 
 uint8_t rfm12_tx(char *buf, uint16_t length);
 bool rfm12_haspacket(void);

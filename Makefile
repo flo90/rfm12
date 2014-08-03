@@ -8,7 +8,7 @@
 MCU = atmega644
 FORMAT = ihex
 TARGET = main
-SRC = $(TARGET).c spi.c rfm12.c rfm12phy.c rfm12mac.c rfm12macbuf.c rfm12llc.c  usart.c
+SRC = $(TARGET).c spi.c rfm12.c rfm12phy.c rfm12mac.c rfm12macbuf.c usart.c
 ASRC = 
 OPT = s
 

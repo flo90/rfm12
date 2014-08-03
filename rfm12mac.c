@@ -22,7 +22,6 @@
 #include <inttypes.h>
 #include <stdbool.h>
 
-#include "rfm12llc.h"
 #include "rfm12channel.h"
 #include "rfm12macbuf.h"
 
@@ -31,8 +30,8 @@
 #include "usart.h"
 #include <stdio.h>
 
-#define MAC_BROADCAST_ADDR 0x7FFF
-static char string[20];
+#define RFM12_MAC_LLC_SERVICESIZE 10
+
 const uint8_t _rfm12_mac_sync[] = {0x2D, 0xD4};
 
 RFM12_MAC_RX_State_t volatile rxmacstate;
@@ -40,9 +39,9 @@ RFM12_MAC_TX_State_t volatile txmacstate;
 RFM12_MAC_Header_t txheader;
 RFM12_MAC_t macconfig;
 
-#ifdef RFM12_MAC_USEBUFFER
 static RFM12_MAC_TX_FRAME_t *ptxframe = NULL;
-#endif
+
+static void (*rfm12_mac_llcService[RFM12_MAC_LLC_SERVICESIZE])(RFM12_MAC_Frame_t *pframe);
 
 volatile uint16_t txlength;
 volatile uint8_t *txdata;
@@ -50,10 +49,13 @@ bool (*rfm12_mac_nextLayerReceiveCallback)(uint8_t data) = NULL;
 
 void rfm12_mac_init()
 {
-#ifdef RFM12_MAC_USEBUFFER
+  uint8_t i;
   rfm12_mac_buf_init();
-#endif
   rxmacstate = RFM12_MAC_RX_STATE_IDLE;
+  for(i = 0; i < RFM12_MAC_LLC_SERVICESIZE; i++)
+  {
+    rfm12_mac_llcService[i] = NULL;
+  }
 }
 
 void rfm12_mac_setChannel(uint8_t chan, RFM12_PHY_VDI_t vdi, RFM12_PHY_LNAGAIN_t lna, RFM12_PHY_RSSIDTH_t rssiDTh, RFM12_PHY_OutPwr_t pwr)
@@ -74,7 +76,7 @@ void rfm12_mac_setGroup(uint16_t grps)
 {
   macconfig.grps = grps & ~RFM12_MAC_GROUP_SIGN;
 }
-#ifdef RFM12_MAC_USEBUFFER
+
 bool rfm12_mac_startTransmission(RFM12_MAC_TX_FRAME_t *pframe)
 {
   ptxframe = pframe;
@@ -83,20 +85,32 @@ bool rfm12_mac_startTransmission(RFM12_MAC_TX_FRAME_t *pframe)
   txmacstate = RFM12_MAC_TX_STATE_PREAMBLE;
   return rfm12_phy_modeTX();
 }
-#else
-bool rfm12_mac_startTransmission(uint16_t pdst, uint16_t plength)
+#ifdef RFM12_USELLC
+void rfm12_mac_addLLCService(uint8_t service, void (*prfm12_mac_llcService)(RFM12_MAC_Frame_t *pframe))
 {
-  txlength = plength;
-  txheader.dstAddr = pdst;
-  txmacstate = RFM12_MAC_TX_STATE_PREAMBLE;
-  return rfm12_phy_modeTX();
+  if(service > RFM12_MAC_LLC_SERVICESIZE)
+  {
+    return;
+  }
+  
+  rfm12_mac_llcService[service] = prfm12_mac_llcService;
+}
+
+void rfm12_mac_LLCtaskHandler()
+{
+  RFM12_MAC_Frame_t *pframe = rfm12_mac_buf_nextPkt();
+  if((pframe != NULL) && (rfm12_mac_llcService[pframe->header.service] != NULL))
+  {
+    rfm12_mac_llcService[pframe->header.service](pframe);
+    rfm12_mac_buf_clearFrame();
+  }
 }
 #endif
 
 bool rfm12_mac_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_t status)
 { 
   //just a cheap checksum to ensure that the length is not corrupted 
-  static uint8_t checksum = 0;
+  static uint8_t checksum;
   static RFM12_MAC_Frame_t volatile *pframe;
   static RFM12_MAC_Header_t rxheader;
   static volatile uint8_t *pdata;
@@ -120,10 +134,6 @@ bool rfm12_mac_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_
       {
 	goto reset;
       }
-      /*
-      snprintf(string, sizeof(string), "RX Size: %u", rxheader.length);
-      usart_puts_nonblock(string);
-      */
       checksum += data;
       break;
 	  
@@ -164,10 +174,22 @@ bool rfm12_mac_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_
       break;
       
     case RFM12_MAC_RX_STATE_SRC_LOW:
+#ifdef RFM12_USELLC
+      rxmacstate = RFM12_MAC_RX_STATE_LLC_SERVICE;
+#else
       rxmacstate = RFM12_MAC_RX_STATE_CHECKSUM;
+#endif
       rxheader.srcAddr |= data&0xFF;
       checksum += data;
       break;
+      
+#ifdef RFM12_USELLC
+    case RFM12_MAC_RX_STATE_LLC_SERVICE:
+      rxmacstate = RFM12_MAC_RX_STATE_CHECKSUM;
+      rxheader.service = data;
+      checksum += data;
+      break;
+#endif
       
     case RFM12_MAC_RX_STATE_CHECKSUM:
       rxmacstate = RFM12_MAC_RX_STATE_PUT_SRC_ADDR;
@@ -178,7 +200,7 @@ bool rfm12_mac_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_
      
     case RFM12_MAC_RX_STATE_PUT_SRC_ADDR:
       rxmacstate = RFM12_MAC_RX_STATE_RX;
-#ifdef RFM12_MAC_USEBUFFER
+
       if((pframe = rfm12_mac_buf_reqSpace(rxheader.length)) == NULL)
       {
 	goto reset;
@@ -186,39 +208,22 @@ bool rfm12_mac_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_
       pframe->header.dstAddr = rxheader.dstAddr;
       pframe->header.srcAddr = rxheader.srcAddr;
       pframe->header.length = rxheader.length;
-      pdata = pframe->data;
-#else
-      if(!rfm12_llc_previousLayerReceiveCallback(rxheader.srcAddr>>8, status) || !rfm12_llc_previousLayerReceiveCallback(rxheader.srcAddr&0xFF, status))
-      {
-	goto reset;
-      }
+#ifdef RFM12_USELLC
+      pframe->header.service = rxheader.service;
 #endif
+      pdata = pframe->data;
       break;
-    case RFM12_MAC_RX_STATE_RX:
-      //usart_putc_nonblock(data);
-      //--rxheader.length;
-#ifdef RFM12_MAC_USEBUFFER
-      *(pdata++) = data;
-#endif    
-     
       
+    case RFM12_MAC_RX_STATE_RX:
+      *(pdata++) = data;
+  
       if(0 < --rxheader.length)
       {
-#ifndef RFM12_MAC_USEBUFFER
-	if(!rfm12_llc_previousLayerReceiveCallback(data, status))
-	{
-	  goto reset;
-	}
-#endif
       }
       
       else
       {
-#ifdef RFM12_MAC_USEBUFFER
 	pframe->finished = true;
-#else
-	rfm12_llc_previousLayerReceiveCallback(data, RFM12_TRANSFER_STATUS_LASTBYTE);
-#endif
 	goto reset;
       }
       
@@ -238,7 +243,7 @@ bool rfm12_mac_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_
 }
 
 
-uint8_t rfm12_mac_previousLayerTransmitCallback(void)
+uint8_t rfm12_mac_previousLayerTransmitCallback()
 {
   uint8_t temp = 0x00;
   
@@ -262,38 +267,22 @@ uint8_t rfm12_mac_previousLayerTransmitCallback(void)
       
     case RFM12_MAC_TX_STATE_LENGTH_HIGH:
       txmacstate = RFM12_MAC_TX_STATE_LENGTH_LOW;
-#ifdef RFM12_MAC_USEBUFFER
       temp = ((ptxframe->length)>>8)&0xFF;
-#else
-      temp = (txlength>>8)&0xFF;
-#endif
       break;
       
     case RFM12_MAC_TX_STATE_LENGTH_LOW:
       txmacstate = RFM12_MAC_TX_STATE_DST_HIGH;
-#ifdef RFM12_MAC_USEBUFFER
       temp = (ptxframe->length)&0xFF;
-#else
-      temp = txlength&0xFF;
-#endif
       break;
       
     case RFM12_MAC_TX_STATE_DST_HIGH:
       txmacstate = RFM12_MAC_TX_STATE_DST_LOW;
-#ifdef RFM12_MAC_USEBUFFER
       temp = ((ptxframe->dstAddr)>>8)&0xFF;
-#else
-      temp = (txheader.dstAddr>>8)&0xFF;
-#endif
       break;
       
     case RFM12_MAC_TX_STATE_DST_LOW:
       txmacstate = RFM12_MAC_TX_STATE_SRC_HIGH;
-#ifdef RFM12_MAC_USEBUFFER
       temp = (ptxframe->dstAddr)&0xFF;
-#else
-      temp = txheader.dstAddr&0xFF;
-#endif
       break;
       
     case RFM12_MAC_TX_STATE_SRC_HIGH:
@@ -302,40 +291,43 @@ uint8_t rfm12_mac_previousLayerTransmitCallback(void)
       break;
       
     case RFM12_MAC_TX_STATE_SRC_LOW:
+#ifdef RFM12_USELLC
+      txmacstate = RFM12_MAC_TX_STATE_LLC_SERVICE;
+#else
       txmacstate = RFM12_MAC_TX_STATE_CHECKSUM;
+#endif
       temp = macconfig.ownAddr&0xFF;
       break;
       
+#ifdef RFM12_USELLC
+    case RFM12_MAC_TX_STATE_LLC_SERVICE:
+      txmacstate = RFM12_MAC_TX_STATE_CHECKSUM;
+      temp = ptxframe->service;
+      break;
+#endif
+      
     case RFM12_MAC_TX_STATE_CHECKSUM:
       txmacstate = RFM12_MAC_TX_STATE_TX;
-#ifdef RFM12_MAC_USEBUFFER
+      
       temp = ((ptxframe->length)>>8)&0xFF;
       temp += (ptxframe->length)&0xFF;
       
       temp += ((ptxframe->dstAddr)>>8)&0xFF;
       temp += (ptxframe->dstAddr)&0xFF;
-#else
-      temp = (txlength>>8)&0xFF;
-      temp += txlength&0xFF;
       
-      temp += (txheader.dstAddr>>8)&0xFF;
-      temp += txheader.dstAddr&0xFF;
-#endif
       temp += (macconfig.ownAddr>>8)&0xFF;
       temp += macconfig.ownAddr&0xFF;
       
-      //txlength++;
+#ifdef RFM12_USELLC
+      temp += ptxframe->service;
+#endif
       break;
       
     case RFM12_MAC_TX_STATE_TX:
       
       if(0 < txlength--)
       {
-#ifdef RFM12_MAC_USEBUFFER
 	temp = *txdata++;
-#else
-	temp = rfm12_llc_previousLayerTransmitCallback();
-#endif
       }
       
       else
@@ -347,9 +339,8 @@ uint8_t rfm12_mac_previousLayerTransmitCallback(void)
       break;
       
     case RFM12_MAC_TX_STATE_END:
-#ifdef RFM12_MAC_USEBUFFER
       ptxframe = NULL;
-#endif
+
       //set to receive mode
       rfm12_phy_modeRX();
       

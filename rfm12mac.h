@@ -1,19 +1,18 @@
 #ifndef _RFM12MAC_H_
 #define _RFM12MAC_H_
 
-#include "rfm12phy.h"
-
 #include <stdlib.h>
 #include <inttypes.h>
 #include <stdbool.h>
 
 #include "rfm12.h"
+#include "rfm12phy.h"
 
+
+#define MAC_BROADCAST_ADDR 0x7FFF
 #define RFM12_MAC_GROUP_SIGN (1<<15)
-#define RFM12_MAC_USEBUFFER
-#define RFM12_USELLC
 
-#define RFM12_MAC_MAXFRAMES 10
+#define RFM12_USELLC
 
 typedef enum RFM12_MAC_RX_State
 {
@@ -24,6 +23,9 @@ typedef enum RFM12_MAC_RX_State
   RFM12_MAC_RX_STATE_DST_HIGH,
   RFM12_MAC_RX_STATE_SRC_LOW,
   RFM12_MAC_RX_STATE_SRC_HIGH,
+#ifdef RFM12_USELLC
+  RFM12_MAC_RX_STATE_LLC_SERVICE,
+#endif
   RFM12_MAC_RX_STATE_CHECKSUM,
   RFM12_MAC_RX_STATE_PUT_SRC_ADDR,
   RFM12_MAC_RX_STATE_RX,
@@ -38,11 +40,14 @@ typedef enum RFM12_MAC_TX_State
   RFM12_MAC_TX_STATE_DST_HIGH,
   RFM12_MAC_TX_STATE_SRC_LOW,
   RFM12_MAC_TX_STATE_SRC_HIGH,
+#ifdef RFM12_USELLC
+  RFM12_MAC_TX_STATE_LLC_SERVICE,
+#endif
   RFM12_MAC_TX_STATE_CHECKSUM,
   RFM12_MAC_TX_STATE_TX,
   RFM12_MAC_TX_STATE_SYNC0,
   RFM12_MAC_TX_STATE_SYNC1,
-  RFM12_MAC_TX_STATE_END
+  RFM12_MAC_TX_STATE_END,
 } RFM12_MAC_TX_State_t;
 
 typedef struct RFM12_MAC_Channel
@@ -58,7 +63,17 @@ typedef struct RFM12_MAC_Header
   uint16_t dstAddr;
   uint16_t srcAddr;
   uint16_t length;
+#ifdef RFM12_USELLC
+  uint8_t service;
+#endif
 }RFM12_MAC_Header_t;
+
+typedef struct RFM12_MAC_Frame
+{
+  RFM12_MAC_Header_t header;
+  uint8_t volatile *data;
+  volatile bool finished;
+}RFM12_MAC_Frame_t;
 
 typedef struct RFM12_MAC
 {
@@ -70,6 +85,7 @@ typedef struct RFM12_MAC_TX_FRAME
 {
   uint16_t dstAddr;
   uint16_t length;
+  uint8_t service;
   uint8_t *data;
 }RFM12_MAC_TX_FRAME_t;
 
@@ -86,11 +102,13 @@ void rfm12_mac_setGroup(uint16_t grps);
 
 bool rfm12_mac_mediaBusy(void);
 
-#ifdef RFM12_MAC_USEBUFFER
 bool rfm12_mac_startTransmission(RFM12_MAC_TX_FRAME_t *pframe);
-#else
-bool rfm12_mac_startTransmission(uint16_t pdst, uint16_t length);
+
+#ifdef RFM12_USELLC
+void rfm12_mac_addLLCService(uint8_t service, void (*rfm12_mac_llcService)(RFM12_MAC_Frame_t *pframe));
+void rfm12_mac_LLCtaskHandler(void);
 #endif
-void rfm12_mac_stopTransmission(void);
+
+
 
 #endif

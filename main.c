@@ -20,11 +20,8 @@
 #include "spi.h"
 #include "usart.h"
 #include "rfm12.h"
-#include "rfm12llc.h"
 #include "rfm12mac.h"
-#include "rfm12macbuf.h"
 
-#include "rfm12phy.h"
 
 #include <avr/io.h>
 #include <avr/interrupt.h>
@@ -36,12 +33,6 @@
 #include <stdio.h>
 
 static uint8_t txbuf[] = "Hallo";
-//static uint8_t txbuf[] = {'H', 'a', 'l', 'l', 'o'};
-static uint8_t rxbuf[20];
-static char string[30];
-static uint8_t *prxbuf = rxbuf;
-static uint8_t *prxcompare = txbuf;
-static uint8_t volatile *ptxbuf = txbuf;
 
 static RFM12_MAC_TX_FRAME_t txframe;
 
@@ -80,66 +71,25 @@ void disableINT0(void)
 
 void (*rfm12_int_vect)(void) = NULL;
 
-
-bool receive(uint8_t data, RFM12_Transfer_Status_t status)
-{
-  bool datatest = true;
-  //usart_putc_nonblock(data);
-  if(status == RFM12_TRANSFER_STATUS_LASTBYTE)
-  { 
-    //switchled();
-    prxbuf = rxbuf;
-    prxbuf += 2;
-    
-    while(*prxcompare)
-    {
-      if(*prxcompare != *prxbuf)
-      {
-	datatest = false;
-      }
-
-      prxcompare++;
-      prxbuf++;
-    }
-
-    if(datatest)
-    {
-      switchled();
-    }
-    goto reset;
-  }
-  
-  else
-  {
-    *prxbuf++ = data;
-  }
-  
-  return true;
-  
-  reset:
-  prxbuf = rxbuf;
-  prxcompare = txbuf;
-  
-  return false;
-  
-}
-
-uint8_t transmit(void)
-{
-  uint8_t data = *ptxbuf++;
-  return data;
-}
-
 RFM12_PHY_FUNCPTR_t rfm12funcptr;
 RFM12_MAC_Frame_t *pframe;
+
+void rxtest(RFM12_MAC_Frame_t *pframe)
+{
+  uint8_t i;
+  if(strcmp(pframe->data, txbuf) == 0)
+  {
+    switchled();
+  }
+}
+
 int main(void)
 {
   txframe.data = txbuf;
   txframe.dstAddr = 1;
   txframe.length = sizeof(txbuf);
+  txframe.service = 0;
   
-  static uint8_t *pdata;
-  uint16_t i;
   //init ports
   DDRD |= (1<<PD6) | (1<<PD5);
   PORTD |= (1<<PD2);
@@ -159,24 +109,8 @@ int main(void)
   rfm12funcptr.disableINT = &disableINT0;
   
   
-  rfm12_init( rfm12funcptr, &transmit, 1);
-#ifndef RFM12_MAC_USEBUFFER
-  rfm12_llc_registerProto(0, &receive);
-#endif
-  //------------------PHY Layer TEST-----------------------
-  /*
-  rfm12_phy_init(&spi_exchangeword, &enablerfm12, &disablerfm12, &rfm12_int_vect);
-  
-  rfm12_phy_setConf( true, true, FREQBAND_433MHz, CAP12_5pf);
-  
-  rfm12_phy_setPowerManagement( true, true, true, false, false, false);
-  
-  rfm12_phy_setDataFilter(true, false, false, 4);
-  
-  rfm12_phy_setAFC(AUTOMODE_RECV, RANGELIMIT_3toMINUS4, false, true, true, true);
-  
-  rfm12_phy_modeRX();
-  */
+  rfm12_init( rfm12funcptr, 1);
+  rfm12_mac_addLLCService(0, &rxtest);
   
   PORTD |= (1<<PD6);
   
@@ -193,41 +127,15 @@ int main(void)
   delay_ms(500);
   PORTD |= (1<<PD6);
   usart_puts_nonblock("Init!");
-   
+  
   while(1)
   {
-    delay_ms(100);
-#if 0
-    if((pframe = rfm12_mac_buf_nextPkt()) != NULL)
-    {
-      pdata = (uint8_t *) pframe->data;
-      if(strcmp((char *)txbuf, pframe->data)==0)
-      {
-	switchled();
-      }
-     
-     for(i = 0; i < (pframe->header.length); i++)
-     {
-       usart_putc_nonblock(*(pdata+i));
-     }
-     
-      rfm12_mac_buf_clearFrame();
-    }
     
-#else
+#if 0
     delay_ms(500);
-    ptxbuf = txbuf;
-#ifdef RFM12_MAC_USEBUFFER
-    if(rfm12_mac_startTransmission(&txframe))
-    {
-      usart_puts_nonblock("TX Data");
-    }
+    rfm12_mac_startTransmission(&txframe);
 #else
-    if(rfm12_llc_startTX(1, 0, sizeof(txbuf)))
-    {
-      usart_puts_nonblock("TX Data");
-    }
-#endif
+    rfm12_mac_LLCtaskHandler();
 #endif
   }
   

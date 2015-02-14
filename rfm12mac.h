@@ -33,7 +33,7 @@ typedef enum RFM12_MAC_RX_State
 
 typedef enum RFM12_MAC_TX_State
 {
-  RFM12_MAC_TX_STATE_PREAMBLE,
+  RFM12_MAC_TX_STATE_PREAMBLE_AND_CONFIG,
   RFM12_MAC_TX_STATE_LENGTH_LOW,
   RFM12_MAC_TX_STATE_LENGTH_HIGH,
   RFM12_MAC_TX_STATE_DST_LOW,
@@ -81,14 +81,6 @@ typedef struct RFM12_MAC
   uint16_t grps;
 }RFM12_MAC_t;
 
-typedef struct RFM12_MAC_TX_FRAME
-{
-  uint16_t dstAddr;
-  uint16_t length;
-  uint8_t service;
-  uint8_t *data;
-}RFM12_MAC_TX_FRAME_t;
-
 bool rfm12_mac_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_t status);
 uint8_t rfm12_mac_previousLayerTransmitCallback(void);
 
@@ -102,7 +94,7 @@ void rfm12_mac_setGroup(uint16_t grps);
 
 bool rfm12_mac_mediaBusy(void);
 
-bool rfm12_mac_startTransmission(RFM12_MAC_TX_FRAME_t *pframe);
+bool rfm12_mac_startTransmission(RFM12_MAC_Frame_t *pframe);
 
 #ifdef RFM12_USELLC
 void rfm12_mac_addLLCService(uint8_t service, void (*rfm12_mac_llcService)(RFM12_MAC_Frame_t *pframe));

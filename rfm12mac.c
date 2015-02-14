@@ -39,13 +39,9 @@ RFM12_MAC_TX_State_t volatile txmacstate;
 RFM12_MAC_Header_t txheader;
 RFM12_MAC_t macconfig;
 
-static RFM12_MAC_TX_FRAME_t *ptxframe = NULL;
+static RFM12_MAC_Frame_t *ptxframe = NULL;
 
 static void (*rfm12_mac_llcService[RFM12_MAC_LLC_SERVICESIZE])(RFM12_MAC_Frame_t *pframe);
-
-volatile uint16_t txlength;
-volatile uint8_t *txdata;
-bool (*rfm12_mac_nextLayerReceiveCallback)(uint8_t data) = NULL;
 
 void rfm12_mac_init()
 {
@@ -77,13 +73,25 @@ void rfm12_mac_setGroup(uint16_t grps)
   macconfig.grps = grps & ~RFM12_MAC_GROUP_SIGN;
 }
 
-bool rfm12_mac_startTransmission(RFM12_MAC_TX_FRAME_t *pframe)
+bool rfm12_mac_startTransmission(RFM12_MAC_Frame_t *pframe)
 {
+  if(ptxframe != NULL)
+  {
+    return false;
+  }
   ptxframe = pframe;
-  txlength = ptxframe->length;
-  txdata = ptxframe->data;
-  txmacstate = RFM12_MAC_TX_STATE_PREAMBLE;
-  return rfm12_phy_modeTX();
+  ptxframe->header.srcAddr = macconfig.ownAddr;
+  txmacstate = RFM12_MAC_TX_STATE_PREAMBLE_AND_CONFIG;
+  
+  if(rfm12_phy_modeTX())
+  {
+    return true;
+  }
+  else
+  {
+    ptxframe = NULL;
+    return false;
+  }
 }
 #ifdef RFM12_USELLC
 void rfm12_mac_addLLCService(uint8_t service, void (*prfm12_mac_llcService)(RFM12_MAC_Frame_t *pframe))
@@ -215,18 +223,12 @@ bool rfm12_mac_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_
       break;
       
     case RFM12_MAC_RX_STATE_RX:
-      *(pdata++) = data;
-  
-      if(0 < --rxheader.length)
-      {
-      }
-      
-      else
+      *pdata++ = data;
+      if(!(--rxheader.length))
       {
 	pframe->finished = true;
 	goto reset;
       }
-      
       break;
   }
   
@@ -242,16 +244,20 @@ bool rfm12_mac_previousLayerReceiveCallback(uint8_t data, RFM12_Transfer_Status_
   return false;
 }
 
-
 uint8_t rfm12_mac_previousLayerTransmitCallback()
 {
-  uint8_t temp = 0x00;
+  uint8_t temp = 0;
+  static uint8_t *txdata = NULL;
+  static uint16_t txlength = 0;
   
   switch(txmacstate)
   {
-    case RFM12_MAC_TX_STATE_PREAMBLE:
+    case RFM12_MAC_TX_STATE_PREAMBLE_AND_CONFIG:
       txmacstate = RFM12_MAC_TX_STATE_SYNC0;
       temp = 0xAA;
+      //set txdata and txlength
+      txdata =(uint8_t *)ptxframe->data;
+      txlength = ptxframe->header.length;
       break;
     
     case RFM12_MAC_TX_STATE_SYNC0:
@@ -264,30 +270,29 @@ uint8_t rfm12_mac_previousLayerTransmitCallback()
       temp = _rfm12_mac_sync[1];
       break;
       
-      
     case RFM12_MAC_TX_STATE_LENGTH_HIGH:
       txmacstate = RFM12_MAC_TX_STATE_LENGTH_LOW;
-      temp = ((ptxframe->length)>>8)&0xFF;
+      temp = ((ptxframe->header.length)>>8)&0xFF;
       break;
       
     case RFM12_MAC_TX_STATE_LENGTH_LOW:
       txmacstate = RFM12_MAC_TX_STATE_DST_HIGH;
-      temp = (ptxframe->length)&0xFF;
+      temp = (ptxframe->header.length)&0xFF;
       break;
       
     case RFM12_MAC_TX_STATE_DST_HIGH:
       txmacstate = RFM12_MAC_TX_STATE_DST_LOW;
-      temp = ((ptxframe->dstAddr)>>8)&0xFF;
+      temp = ((ptxframe->header.dstAddr)>>8)&0xFF;
       break;
       
     case RFM12_MAC_TX_STATE_DST_LOW:
       txmacstate = RFM12_MAC_TX_STATE_SRC_HIGH;
-      temp = (ptxframe->dstAddr)&0xFF;
+      temp = (ptxframe->header.dstAddr)&0xFF;
       break;
       
     case RFM12_MAC_TX_STATE_SRC_HIGH:
       txmacstate = RFM12_MAC_TX_STATE_SRC_LOW;
-      temp = (macconfig.ownAddr>>8)&0xFF;
+      temp = ((ptxframe->header.srcAddr)>>8)&0xFF;
       break;
       
     case RFM12_MAC_TX_STATE_SRC_LOW:
@@ -296,35 +301,34 @@ uint8_t rfm12_mac_previousLayerTransmitCallback()
 #else
       txmacstate = RFM12_MAC_TX_STATE_CHECKSUM;
 #endif
-      temp = macconfig.ownAddr&0xFF;
+      temp = (ptxframe->header.srcAddr)&0xFF;
       break;
       
 #ifdef RFM12_USELLC
     case RFM12_MAC_TX_STATE_LLC_SERVICE:
       txmacstate = RFM12_MAC_TX_STATE_CHECKSUM;
-      temp = ptxframe->service;
+      temp = ptxframe->header.service;
       break;
 #endif
       
     case RFM12_MAC_TX_STATE_CHECKSUM:
       txmacstate = RFM12_MAC_TX_STATE_TX;
       
-      temp = ((ptxframe->length)>>8)&0xFF;
-      temp += (ptxframe->length)&0xFF;
+      temp = ((ptxframe->header.length)>>8)&0xFF;
+      temp += (ptxframe->header.length)&0xFF;
       
-      temp += ((ptxframe->dstAddr)>>8)&0xFF;
-      temp += (ptxframe->dstAddr)&0xFF;
+      temp += ((ptxframe->header.dstAddr)>>8)&0xFF;
+      temp += (ptxframe->header.dstAddr)&0xFF;
       
-      temp += (macconfig.ownAddr>>8)&0xFF;
-      temp += macconfig.ownAddr&0xFF;
+      temp += (ptxframe->header.srcAddr>>8)&0xFF;
+      temp += (ptxframe->header.srcAddr)&0xFF;
       
 #ifdef RFM12_USELLC
-      temp += ptxframe->service;
+      temp += ptxframe->header.service;
 #endif
       break;
       
     case RFM12_MAC_TX_STATE_TX:
-      
       if(0 < txlength--)
       {
 	temp = *txdata++;
@@ -339,6 +343,7 @@ uint8_t rfm12_mac_previousLayerTransmitCallback()
       break;
       
     case RFM12_MAC_TX_STATE_END:
+      ptxframe->finished=true;
       ptxframe = NULL;
 
       //set to receive mode

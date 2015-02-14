@@ -34,7 +34,7 @@
 
 static uint8_t txbuf[] = "Hallo";
 
-static RFM12_MAC_TX_FRAME_t txframe;
+static RFM12_MAC_Frame_t txframe;
 
 void delay_ms(uint16_t ms)
 {
@@ -86,9 +86,9 @@ void rxtest(RFM12_MAC_Frame_t *pframe)
 int main(void)
 {
   txframe.data = txbuf;
-  txframe.dstAddr = 1;
-  txframe.length = sizeof(txbuf);
-  txframe.service = 0;
+  txframe.header.dstAddr = 1;
+  txframe.header.length = sizeof(txbuf);
+  txframe.header.service = 0;
   
   //init ports
   DDRD |= (1<<PD6) | (1<<PD5);
@@ -131,7 +131,7 @@ int main(void)
   while(1)
   {
     
-#if 0
+#if 1
     delay_ms(500);
     rfm12_mac_startTransmission(&txframe);
 #else
